@@ -833,6 +833,157 @@ function App() {
     }
   }
 
+  const downloadApplyGuidanceReport = () => {
+    if (!constructionGuidance) return
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 12
+    const contentWidth = pageWidth - margin * 2
+    const footerY = pageHeight - 10
+    const generatedAt = new Date().toLocaleString()
+
+    let cursorY = 20
+    let pageNumber = 1
+
+    const drawPageFrame = () => {
+      doc.setDrawColor(190, 208, 224)
+      doc.setLineWidth(0.5)
+      doc.roundedRect(7, 7, pageWidth - 14, pageHeight - 14, 2, 2)
+    }
+
+    const drawPageHeader = (continued = false) => {
+      drawPageFrame()
+      doc.setFillColor(238, 246, 255)
+      doc.setDrawColor(199, 219, 238)
+      doc.roundedRect(margin, 12, contentWidth, 16, 2, 2, 'FD')
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(24, 66, 105)
+      doc.setFontSize(12)
+      doc.text(continued ? 'Resilience360 AI Construction Guidance (Continued)' : 'Resilience360 AI Construction Guidance Report', margin + 3, 19)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(60, 84, 107)
+      doc.setFontSize(9)
+      doc.text(`${applyCity}, ${applyProvince} · Hazard: ${applyHazard}`, margin + 3, 24)
+      cursorY = 34
+    }
+
+    const drawFooter = () => {
+      doc.setDrawColor(221, 231, 241)
+      doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(90, 104, 119)
+      doc.text(`Generated: ${generatedAt}`, margin, footerY)
+      doc.text(`Page ${pageNumber}`, pageWidth - margin, footerY, { align: 'right' })
+    }
+
+    const ensureSpace = (requiredHeight: number) => {
+      if (cursorY + requiredHeight <= footerY - 4) return
+      drawFooter()
+      doc.addPage()
+      pageNumber += 1
+      drawPageHeader(true)
+    }
+
+    const drawSection = (title: string, bodyLines: string[]) => {
+      const wrappedLines = bodyLines.flatMap((line) => doc.splitTextToSize(line, contentWidth - 8))
+      const sectionHeight = 8 + wrappedLines.length * 5 + 6
+      ensureSpace(sectionHeight)
+
+      doc.setFillColor(249, 252, 255)
+      doc.setDrawColor(206, 220, 236)
+      doc.roundedRect(margin, cursorY, contentWidth, sectionHeight, 2, 2, 'FD')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(25, 76, 117)
+      doc.setFontSize(10)
+      doc.text(title, margin + 3, cursorY + 5)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(40, 65, 88)
+      doc.setFontSize(9.5)
+
+      let lineY = cursorY + 10
+      for (const line of wrappedLines) {
+        doc.text(line, margin + 4, lineY)
+        lineY += 5
+      }
+
+      cursorY += sectionHeight + 4
+    }
+
+    const drawStep = (
+      step: { title: string; description: string; keyChecks: string[] },
+      index: number,
+      imageDataUrl?: string,
+    ) => {
+      const keyChecks = step.keyChecks.map((item) => `- ${item}`)
+      const stepLines = [step.description, 'Key Checks:', ...keyChecks]
+      const wrappedStepLines = stepLines.flatMap((line) => doc.splitTextToSize(line, contentWidth - 8))
+      const lineBlockHeight = wrappedStepLines.length * 5
+      const hasImage = Boolean(imageDataUrl)
+      const imageHeight = hasImage ? 56 : 0
+      const blockHeight = 12 + lineBlockHeight + imageHeight + 8
+
+      ensureSpace(blockHeight)
+
+      doc.setFillColor(255, 255, 255)
+      doc.setDrawColor(204, 219, 235)
+      doc.roundedRect(margin, cursorY, contentWidth, blockHeight, 2, 2, 'FD')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(24, 66, 105)
+      doc.setFontSize(10)
+      doc.text(`Step ${index + 1}: ${step.title}`, margin + 3, cursorY + 6)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(46, 71, 93)
+      doc.setFontSize(9.5)
+
+      let textY = cursorY + 12
+      for (const line of wrappedStepLines) {
+        doc.text(line, margin + 4, textY)
+        textY += 5
+      }
+
+      if (hasImage && imageDataUrl) {
+        const imageWidth = contentWidth - 8
+        try {
+          doc.addImage(imageDataUrl, 'PNG', margin + 4, textY + 2, imageWidth, imageHeight)
+        } catch {
+          doc.setFontSize(9)
+          doc.setTextColor(120, 80, 52)
+          doc.text('Step image preview unavailable in PDF export.', margin + 4, textY + 7)
+        }
+      }
+
+      cursorY += blockHeight + 4
+    }
+
+    drawPageHeader()
+
+    drawSection('Project Context', [
+      `Province: ${applyProvince}`,
+      `City: ${applyCity}`,
+      `Hazard Focus: ${applyHazard}`,
+      `Structure Type: ${structureType}`,
+    ])
+
+    drawSection('Executive Summary', [constructionGuidance.summary])
+    drawSection('Recommended Materials', constructionGuidance.materials.map((item) => `- ${item}`))
+    drawSection('Safety Requirements', constructionGuidance.safety.map((item) => `- ${item}`))
+
+    for (const [index, step] of constructionGuidance.steps.entries()) {
+      const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
+      drawStep(step, index, image?.imageDataUrl)
+    }
+
+    drawFooter()
+    doc.save(`resilience360-guidance-report-${applyProvince}-${applyCity}-${Date.now()}.pdf`)
+  }
+
   const designHazardOverlay = useMemo(() => getHazardOverlay(designProvince, designCity), [designProvince, designCity])
 
   const designCityRates = useMemo(
@@ -2607,6 +2758,7 @@ function App() {
                   )
                 })}
               </div>
+              <button onClick={downloadApplyGuidanceReport}>📄 Download Professional Guidance Report (PDF)</button>
               {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
             </div>
           )}
