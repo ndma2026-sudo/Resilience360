@@ -2641,10 +2641,13 @@ function App() {
           <h2>{t.sections.infraModels}</h2>
           <p>AI catalog of resilient infrastructure models with realistic visuals, features, and Pakistan-specific implementation benefits.</p>
           <div className="infra-video-panel">
-            <h3>Infra Layout Video</h3>
-            <p>Play the project layout video directly in the app.</p>
+            <h3>Video on first ever infra resilient models developed by NDMA-IAPD wing</h3>
+            <p>
+              This video presents the first NDMA-IAPD resilient infrastructure model concepts, highlighting hazard-aware design,
+              safer construction planning, and practical implementation pathways for Pakistan.
+            </p>
             {!showInfraLayoutVideo ? (
-              <button onClick={() => setShowInfraLayoutVideo(true)}>▶️ Play Layout Video</button>
+              <button onClick={() => setShowInfraLayoutVideo(true)}>▶️ Play NDMA-IAPD Resilient Models Video</button>
             ) : (
               <>
                 <video
@@ -2658,6 +2661,10 @@ function App() {
                   <source src={infraLayoutVideoSrc} type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
+                <p>
+                  Purpose: to help engineers, planners, and communities understand how resilience-focused model layouts can reduce
+                  flood and earthquake risk before construction begins.
+                </p>
                 <button onClick={() => setShowInfraLayoutVideo(false)}>⏹️ Hide Video</button>
               </>
             )}
