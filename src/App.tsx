@@ -2641,13 +2641,13 @@ function App() {
           <h2>{t.sections.infraModels}</h2>
           <p>AI catalog of resilient infrastructure models with realistic visuals, features, and Pakistan-specific implementation benefits.</p>
           <div className="infra-video-panel">
-            <h3>Video on first ever infra resilient models developed by NDMA-IAPD wing</h3>
+            <h3>NDMA-IAPD First Resilient Infrastructure Models – Official Overview</h3>
             <p>
               This video presents the first NDMA-IAPD resilient infrastructure model concepts, highlighting hazard-aware design,
               safer construction planning, and practical implementation pathways for Pakistan.
             </p>
             {!showInfraLayoutVideo ? (
-              <button onClick={() => setShowInfraLayoutVideo(true)}>▶️ Play NDMA-IAPD Resilient Models Video</button>
+              <button onClick={() => setShowInfraLayoutVideo(true)}>▶️ Play Official Overview Video</button>
             ) : (
               <>
                 <video
