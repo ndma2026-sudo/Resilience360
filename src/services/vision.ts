@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase'
+
 export type DefectDetection = {
   type: 'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other'
   severity: 'low' | 'medium' | 'high'
@@ -46,7 +48,7 @@ export const analyzeBuildingWithVision = async (payload: {
   formData.append('location', payload.location)
   formData.append('riskProfile', payload.riskProfile)
 
-  const response = await fetch('/api/vision/analyze', {
+  const response = await fetch(buildApiUrl('/api/vision/analyze'), {
     method: 'POST',
     body: formData,
   })

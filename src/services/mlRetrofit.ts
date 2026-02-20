@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase'
+
 export type MlRetrofitEstimate = {
   model: string
   predictedScope: 'basic' | 'standard' | 'comprehensive'
@@ -29,7 +31,7 @@ export const getMlRetrofitEstimate = async (payload: {
   defectProfile?: Partial<Record<'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other', number>>
   imageQuality?: 'excellent' | 'good' | 'fair' | 'poor'
 }): Promise<MlRetrofitEstimate> => {
-  const response = await fetch('/api/ml/retrofit-estimate', {
+  const response = await fetch(buildApiUrl('/api/ml/retrofit-estimate'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

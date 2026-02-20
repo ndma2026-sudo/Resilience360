@@ -1,3 +1,5 @@
+import { buildApiTargets } from './apiBase'
+
 export type InfraModel = {
   id: string
   title: string
@@ -7,10 +9,8 @@ export type InfraModel = {
   imageDataUrl: string
 }
 
-const FALLBACK_BACKEND = 'http://localhost:8787'
-
 const postJsonWithFallback = async (path: string, payload: object): Promise<Response> => {
-  const targets = [path, `${FALLBACK_BACKEND}${path}`]
+  const targets = buildApiTargets(path)
   let lastError: Error | null = null
 
   for (const target of targets) {

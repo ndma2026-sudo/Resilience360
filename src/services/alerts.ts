@@ -1,3 +1,5 @@
+import { buildApiUrl } from './apiBase'
+
 export type LiveAlert = {
   id: string
   source: 'NDMA' | 'PMD'
@@ -105,15 +107,15 @@ const parsePmdRss = (xmlString: string): LiveAlert[] => {
 
 export const fetchLiveAlerts = async (): Promise<LiveAlert[]> => {
   const ndmaCandidates = [
-    '/api/ndma/advisories',
+    buildApiUrl('/api/ndma/advisories'),
     NDMA_ADVISORIES_URL,
-    '/api/ndma/sitreps',
+    buildApiUrl('/api/ndma/sitreps'),
     NDMA_SITREPS_URL,
-    '/api/ndma/projections',
+    buildApiUrl('/api/ndma/projections'),
     NDMA_PROJECTIONS_URL,
   ]
 
-  const pmdCandidates = ['/api/pmd/rss', PMD_RSS_URL]
+  const pmdCandidates = [buildApiUrl('/api/pmd/rss'), PMD_RSS_URL]
 
   const [ndmaAdvisoryHtml, ndmaSitrepHtml, ndmaProjectionHtml, pmdRssXml] = await Promise.all([
     fetchTextFromAny(ndmaCandidates.slice(0, 2)),

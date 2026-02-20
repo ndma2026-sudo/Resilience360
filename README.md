@@ -31,6 +31,14 @@ Resilience360 is an Infrastructure Safety and Disaster Engineering Toolkit focus
 2. Set Source to GitHub Actions
 3. Push to main (workflow auto-deploys frontend)
 
+### Required repo variable for backend API
+
+In GitHub repository settings, add:
+
+- Settings -> Secrets and variables -> Actions -> Variables -> New repository variable
+- Name: VITE_API_BASE_URL
+- Value: https://YOUR-RENDER-SERVICE.onrender.com
+
 ## Mobile (PWA + Capacitor)
 
 - Build and sync native projects: npm run mobile:prepare
