@@ -20,6 +20,17 @@ Resilience360 is an Infrastructure Safety and Disaster Engineering Toolkit focus
 
 - npm run build
 
+## GitHub auto-deploy
+
+- Frontend auto-deploy workflow: [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml)
+- Backend auto-deploy instructions: [docs/BACKEND_DEPLOY_INSTRUCTIONS.md](docs/BACKEND_DEPLOY_INSTRUCTIONS.md)
+
+### One-time GitHub Pages setup
+
+1. Open repository Settings -> Pages
+2. Set Source to GitHub Actions
+3. Push to main (workflow auto-deploys frontend)
+
 ## Mobile (PWA + Capacitor)
 
 - Build and sync native projects: npm run mobile:prepare
