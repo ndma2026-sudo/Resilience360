@@ -32,19 +32,21 @@
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100dvh;
   background: linear-gradient(180deg, #bdd7ea 0%, #96bdd8 48%, #d3e6f2 100%);
   overflow-x: hidden;
   font-size: var(--type-body);
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--space-4);
+  min-height: 100dvh;
 }
 
 .home-shell {
@@ -245,6 +247,7 @@ button:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   margin-top: var(--space-3);
+  align-items: stretch;
 }
 
 .home-card {
@@ -339,6 +342,12 @@ button:disabled {
   transition:
     box-shadow var(--motion-base) var(--ease-standard),
     border-color var(--motion-base) var(--ease-standard);
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .panel h2 {
@@ -863,6 +872,7 @@ progress {
   .panel {
     padding: var(--space-3);
     border-radius: 10px;
+    margin-top: var(--space-2);
   }
 
   .panel h2 {
@@ -897,6 +907,8 @@ progress {
   .home-card,
   .section-card {
     justify-content: flex-start;
+    min-height: auto;
+    padding: 12px;
   }
 
   .map-toolbar {
@@ -913,7 +925,7 @@ progress {
   }
 
   .leaflet-map {
-    height: 260px;
+    height: min(48vh, 280px);
   }
 
   .home-bottom-strip {
@@ -928,6 +940,10 @@ progress {
 
   .inline-controls {
     gap: 8px;
+  }
+
+  .section-back-row {
+    margin-top: 0;
   }
 
   .brand h1 {
@@ -960,9 +976,9 @@ progress {
   }
 
   .home-card {
-    min-height: 112px;
+    min-height: auto;
     gap: 10px;
-    padding: 12px;
+    padding: 10px;
   }
 
   .home-card-icon {
@@ -983,7 +999,7 @@ progress {
   }
 
   .leaflet-map {
-    height: 220px;
+    height: min(42vh, 230px);
     margin: 10px 0;
   }
 }
