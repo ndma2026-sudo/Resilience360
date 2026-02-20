@@ -27,6 +27,7 @@ type RiskMapProps = {
   riskByProvince: Record<string, { earthquake: string; flood: string; infraRisk: string; landslide?: string }>
   districtRiskLookup?: DistrictRiskLookup
   alertMarkers?: HazardAlertMarker[]
+  userLocationMarker?: { lat: number; lng: number } | null
   colorblindFriendly?: boolean
   onSelectProvince: (province: string) => void
   onSelectDistrict: (district: string | null) => void
@@ -85,6 +86,7 @@ function RiskMap({
   riskByProvince,
   districtRiskLookup,
   alertMarkers,
+  userLocationMarker,
   colorblindFriendly,
   onSelectProvince,
   onSelectDistrict,
@@ -291,6 +293,23 @@ function RiskMap({
             </Popup>
           </CircleMarker>
         ))}
+
+        {userLocationMarker && (
+          <CircleMarker
+            center={[userLocationMarker.lat, userLocationMarker.lng]}
+            radius={5}
+            pathOptions={{ color: '#ffffff', weight: 1.5, fillColor: '#1663a3', fillOpacity: 1 }}
+          >
+            <Tooltip direction="top" offset={[0, -4]} opacity={1}>
+              📍
+            </Tooltip>
+            <Popup>
+              <strong>Your detected location</strong>
+              <br />
+              {userLocationMarker.lat.toFixed(6)}, {userLocationMarker.lng.toFixed(6)}
+            </Popup>
+          </CircleMarker>
+        )}
       </MapContainer>
     </>
   )

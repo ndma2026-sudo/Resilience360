@@ -642,6 +642,7 @@ function App() {
   const [districtProfileSavedMsg, setDistrictProfileSavedMsg] = useState<string | null>(null)
   const [locationAccessMsg, setLocationAccessMsg] = useState<string | null>(null)
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
+  const [detectedUserLocation, setDetectedUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [riskActionProgress, setRiskActionProgress] = useState(0)
   const [advisoryQuestion, setAdvisoryQuestion] = useState('')
   const [advisoryMessages, setAdvisoryMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
@@ -1985,6 +1986,7 @@ function App() {
         const lat = rawLat.toFixed(6)
         const lng = rawLng.toFixed(6)
         const gpsText = `${lat}, ${lng}`
+        setDetectedUserLocation({ lat: rawLat, lng: rawLng })
         const nearestDistrict = findNearestCenterName({ lat: rawLat, lng: rawLng }, districtCenters)
         const nearestProvince = getProvinceForDistrict(nearestDistrict) || findNearestCenterName({ lat: rawLat, lng: rawLng }, provinceCenters)
         const nearestDistrictsInProvince = nearestProvince ? listDistrictsByProvince(nearestProvince) : []
@@ -2309,6 +2311,7 @@ function App() {
             riskByProvince={provinceRisk}
             districtRiskLookup={districtRiskLookup}
             alertMarkers={filteredHazardAlerts}
+            userLocationMarker={detectedUserLocation}
             colorblindFriendly={colorblindFriendlyMap}
             onSelectProvince={setSelectedProvince}
             onSelectDistrict={setSelectedDistrict}
