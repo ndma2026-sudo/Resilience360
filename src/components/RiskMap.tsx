@@ -1,0 +1,299 @@
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
+import centroid from '@turf/centroid'
+import { useEffect, useMemo, useState } from 'react'
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip } from 'react-leaflet'
+import type { Feature, FeatureCollection, Geometry } from 'geojson'
+import type { Layer } from 'leaflet'
+import adm1GeoJsonUrl from '../data/pakistan-adm1.geojson?url'
+import adm2GeoJsonUrl from '../data/pakistan-adm2.geojson?url'
+
+type MapLayer = 'earthquake' | 'flood' | 'infraRisk'
+type DistrictRiskLookup = Record<string, { earthquake: string; flood: string; infraRisk: string }>
+type HazardAlertMarker = {
+  id: string
+  title: string
+  type: 'Flood Warning' | 'Heavy Rain' | 'Earthquake' | 'Relief Point'
+  severity: 'Low' | 'Medium' | 'High'
+  advisory: string
+  icon: string
+  lat: number
+  lng: number
+}
+
+type RiskMapProps = {
+  layer: MapLayer
+  selectedProvince: string
+  selectedDistrict: string | null
+  riskByProvince: Record<string, { earthquake: string; flood: string; infraRisk: string; landslide?: string }>
+  districtRiskLookup?: DistrictRiskLookup
+  alertMarkers?: HazardAlertMarker[]
+  colorblindFriendly?: boolean
+  onSelectProvince: (province: string) => void
+  onSelectDistrict: (district: string | null) => void
+}
+
+type Adm1Props = {
+  shapeName?: string
+}
+
+type Adm2Props = {
+  shapeName?: string
+}
+
+const supportedProvinces = new Set(['Punjab', 'Sindh', 'Balochistan', 'KP', 'GB'])
+
+const normalizeProvince = (shapeName: string): string | null => {
+  const key = shapeName.trim().toLowerCase()
+  if (key === 'khyber pakhtunkhwa') return 'KP'
+  if (key === 'gilgit baltistan') return 'GB'
+  if (key === 'punjab') return 'Punjab'
+  if (key === 'sindh') return 'Sindh'
+  if (key === 'balochistan') return 'Balochistan'
+  return null
+}
+
+const riskColor = (risk: string, colorblindFriendly = false): string => {
+  if (colorblindFriendly) {
+    switch (risk) {
+      case 'Very High':
+        return '#7a0177'
+      case 'High':
+        return '#c51b8a'
+      case 'Medium':
+        return '#f1b6da'
+      default:
+        return '#b8e186'
+    }
+  }
+
+  switch (risk) {
+    case 'Very High':
+      return '#a50026'
+    case 'High':
+      return '#d73027'
+    case 'Medium':
+      return '#fdae61'
+    default:
+      return '#74add1'
+  }
+}
+
+function RiskMap({
+  layer,
+  selectedProvince,
+  selectedDistrict,
+  riskByProvince,
+  districtRiskLookup,
+  alertMarkers,
+  colorblindFriendly,
+  onSelectProvince,
+  onSelectDistrict,
+}: RiskMapProps) {
+  const [adm1GeoData, setAdm1GeoData] = useState<FeatureCollection<Geometry, Adm1Props> | null>(null)
+  const [adm2GeoData, setAdm2GeoData] = useState<FeatureCollection<Geometry, Adm2Props> | null>(null)
+  const [drillProvince, setDrillProvince] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedDistrict) return
+    setDrillProvince(selectedProvince)
+  }, [selectedDistrict, selectedProvince])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadData = async () => {
+      const [adm1Response, adm2Response] = await Promise.all([fetch(adm1GeoJsonUrl), fetch(adm2GeoJsonUrl)])
+      if (!adm1Response.ok || !adm2Response.ok) {
+        throw new Error('Could not load administrative GeoJSON files')
+      }
+      const adm1Json = (await adm1Response.json()) as FeatureCollection<Geometry, Adm1Props>
+      const adm2Json = (await adm2Response.json()) as FeatureCollection<Geometry, Adm2Props>
+
+      if (isMounted) {
+        setAdm1GeoData(adm1Json)
+        setAdm2GeoData(adm2Json)
+      }
+    }
+
+    void loadData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const mapping = useMemo(() => {
+    if (!adm1GeoData || !adm2GeoData) {
+      return {
+        provinceCollection: null as FeatureCollection<Geometry, Adm1Props> | null,
+        districtsByProvince: {} as Record<string, Feature<Geometry, Adm2Props>[]>,
+      }
+    }
+
+    const provinceFeatures = adm1GeoData.features.filter((feature) => {
+      const province = normalizeProvince(String(feature.properties?.shapeName ?? ''))
+      return province ? supportedProvinces.has(province) : false
+    })
+
+    const districtsByProvince: Record<string, Feature<Geometry, Adm2Props>[]> = {
+      Punjab: [],
+      Sindh: [],
+      Balochistan: [],
+      KP: [],
+      GB: [],
+    }
+
+    for (const district of adm2GeoData.features) {
+      const districtCenter = centroid(district as never)
+      for (const provinceFeature of provinceFeatures) {
+        const provinceName = normalizeProvince(String(provinceFeature.properties?.shapeName ?? ''))
+        if (!provinceName) continue
+
+        const isInside = booleanPointInPolygon(
+          districtCenter.geometry as never,
+          provinceFeature.geometry as never,
+        )
+
+        if (isInside) {
+          districtsByProvince[provinceName].push(district)
+          break
+        }
+      }
+    }
+
+    return {
+      provinceCollection: {
+        type: 'FeatureCollection',
+        features: provinceFeatures,
+      } as FeatureCollection<Geometry, Adm1Props>,
+      districtsByProvince,
+    }
+  }, [adm1GeoData, adm2GeoData])
+
+  const districtCollection = useMemo(() => {
+    if (!drillProvince) return null
+    const districts = mapping.districtsByProvince[drillProvince] ?? []
+    return {
+      type: 'FeatureCollection',
+      features: districts,
+    } as FeatureCollection<Geometry, Adm2Props>
+  }, [mapping.districtsByProvince, drillProvince])
+
+  const inDistrictView = drillProvince !== null
+
+  const recommendationRisk = riskByProvince[selectedProvince]?.[layer] ?? 'Low'
+
+  return (
+    <>
+      <div className="map-toolbar">
+        {!inDistrictView && <span className="map-pill">Province View</span>}
+        {inDistrictView && (
+          <>
+            <button
+              className="map-back"
+              onClick={() => {
+                setDrillProvince(null)
+                onSelectDistrict(null)
+              }}
+            >
+              ↩️ Back to Provinces
+            </button>
+            <span className="map-pill">District View: {drillProvince}</span>
+          </>
+        )}
+      </div>
+
+      <MapContainer center={[30.2, 69.3]} zoom={inDistrictView ? 6 : 5} className="leaflet-map" scrollWheelZoom>
+        <TileLayer
+          attribution='&copy; OpenStreetMap contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {!inDistrictView && mapping.provinceCollection && (
+          <GeoJSON
+            data={mapping.provinceCollection as FeatureCollection}
+            style={(feature: Feature<Geometry, Adm1Props> | undefined) => {
+              const shapeName = String(feature?.properties?.shapeName ?? '')
+              const appProvince = normalizeProvince(shapeName)
+              const risk = appProvince ? riskByProvince[appProvince]?.[layer] ?? 'Low' : 'Low'
+
+              return {
+                fillColor: riskColor(risk, colorblindFriendly),
+                weight: appProvince && selectedProvince === appProvince ? 3 : 1,
+                color: '#2c3e50',
+                fillOpacity: 0.55,
+              }
+            }}
+            onEachFeature={(feature: Feature<Geometry, Adm1Props>, layerRef) => {
+              const shapeName = String(feature?.properties?.shapeName ?? 'Unknown')
+              const appProvince = normalizeProvince(shapeName)
+              const risk = appProvince ? riskByProvince[appProvince]?.[layer] ?? 'Low' : 'N/A'
+              ;(layerRef as Layer).on({
+                click: () => {
+                  if (appProvince) {
+                    onSelectProvince(appProvince)
+                    onSelectDistrict(null)
+                    setDrillProvince(appProvince)
+                  }
+                },
+              })
+              layerRef.bindPopup(`<strong>${shapeName}</strong><br/>${layer}: ${risk}`)
+            }}
+          />
+        )}
+
+        {inDistrictView && districtCollection && (
+          <GeoJSON
+            data={districtCollection as FeatureCollection}
+            style={(feature: Feature<Geometry, Adm2Props> | undefined) => {
+              const districtName = String(feature?.properties?.shapeName ?? '')
+              const districtRisk = districtRiskLookup?.[districtName]?.[layer]
+              return {
+                fillColor: riskColor(districtRisk ?? recommendationRisk, colorblindFriendly),
+                weight: selectedDistrict === districtName ? 3 : 1,
+                color: '#2c3e50',
+                fillOpacity: 0.52,
+              }
+            }}
+            onEachFeature={(feature: Feature<Geometry, Adm2Props>, layerRef) => {
+              const districtName = String(feature?.properties?.shapeName ?? 'Unknown district')
+              const districtRisk = districtRiskLookup?.[districtName]?.[layer] ?? recommendationRisk
+              ;(layerRef as Layer).on({
+                click: () => {
+                  onSelectDistrict(districtName)
+                },
+              })
+              layerRef.bindPopup(
+                `<strong>${districtName}</strong><br/>Province: ${drillProvince}<br/>${layer}: ${districtRisk}`,
+              )
+            }}
+          />
+        )}
+
+        {(alertMarkers ?? []).map((alert) => (
+          <CircleMarker
+            key={alert.id}
+            center={[alert.lat, alert.lng]}
+            radius={alert.severity === 'High' ? 8 : alert.severity === 'Medium' ? 7 : 6}
+            pathOptions={{ color: '#2c3e50', weight: 1, fillOpacity: 0.85 }}
+          >
+            <Tooltip direction="top" offset={[0, -4]} opacity={1}>
+              {alert.icon}
+            </Tooltip>
+            <Popup>
+              <strong>{alert.title}</strong>
+              <br />
+              Type: {alert.type}
+              <br />
+              Severity: {alert.severity}
+              <br />
+              {alert.advisory}
+            </Popup>
+          </CircleMarker>
+        ))}
+      </MapContainer>
+    </>
+  )
+}
+
+export default RiskMap

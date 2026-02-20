@@ -1,0 +1,106 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/icon.svg', 'icons/icon-maskable.svg', 'apple-touch-icon.svg'],
+      manifest: {
+        name: 'Resilience360',
+        short_name: 'Resilience360',
+        description: 'Infrastructure Safety & Disaster Engineering Toolkit',
+        theme_color: '#1c6ea4',
+        background_color: '#f4f7fb',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          {
+            src: '/icons/icon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-maskable.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,json,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/tile\.openstreetmap\.org\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'osm-tiles',
+              expiration: {
+                maxEntries: 220,
+                maxAgeSeconds: 60 * 60 * 24 * 14,
+              },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
+  server: {
+    proxy: {
+      '/api/ndma/advisories': {
+        target: 'https://ndma.gov.pk',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/advisories',
+      },
+      '/api/ndma/sitreps': {
+        target: 'https://ndma.gov.pk',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/sitreps',
+      },
+      '/api/ndma/projections': {
+        target: 'https://ndma.gov.pk',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/projection-impact-list_new',
+      },
+      '/api/pmd/rss': {
+        target: 'https://cap-sources.s3.amazonaws.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/pk-pmd-en/rss.xml',
+      },
+      '/api/vision': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/ml': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/guidance': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/models': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
+})
