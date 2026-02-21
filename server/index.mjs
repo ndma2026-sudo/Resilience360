@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 import express from 'express'
 import multer from 'multer'
 import OpenAI from 'openai'
+import { generateConstructionGuidanceMl, generateGuidanceStepImagesMl } from './ml/constructionGuidanceMl.mjs'
 import { predictRetrofitMl } from './ml/retrofitMlModel.mjs'
 
 dotenv.config()
@@ -144,38 +145,18 @@ app.post('/api/ml/retrofit-estimate', (req, res) => {
 })
 
 app.post('/api/guidance/construction', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable AI construction guidance.',
-    })
-    return
-  }
-
   try {
     const province = String(req.body.province ?? 'Punjab')
     const city = String(req.body.city ?? 'Lahore')
     const hazard = String(req.body.hazard ?? 'flood')
     const structureType = String(req.body.structureType ?? 'Masonry House')
 
-    const completion = await openai.chat.completions.create({
-      model,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a senior disaster-resilient construction engineer. Return strict JSON only, practical for Pakistan field implementation.',
-        },
-        {
-          role: 'user',
-          content:
-            `Create construction guidance for ${structureType} in ${city}, ${province}, Pakistan for ${hazard} resilience. Return JSON schema:\n{\n  "summary": string,\n  "materials": string[],\n  "safety": string[],\n  "steps": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Constraints: 4 to 6 steps, each step must be implementation-ready and sequenced.`,
-        },
-      ],
+    const parsed = generateConstructionGuidanceMl({
+      province,
+      city,
+      hazard,
+      structureType,
     })
-
-    const text = completion.choices[0]?.message?.content ?? ''
-    const parsed = extractJson(text)
 
     res.json({
       summary: String(parsed.summary ?? ''),
@@ -196,13 +177,6 @@ app.post('/api/guidance/construction', async (req, res) => {
 })
 
 app.post('/api/guidance/step-images', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable AI step image generation.',
-    })
-    return
-  }
-
   try {
     const province = String(req.body.province ?? 'Punjab')
     const city = String(req.body.city ?? 'Lahore')
@@ -210,28 +184,13 @@ app.post('/api/guidance/step-images', async (req, res) => {
     const structureType = String(req.body.structureType ?? 'Masonry House')
     const steps = safeArray(req.body.steps).slice(0, 4)
 
-    const images = []
-
-    for (const step of steps) {
-      const stepTitle = String(step?.title ?? 'Construction Step')
-      const stepDescription = String(step?.description ?? '')
-      const prompt = `Technical construction illustration for ${structureType} in ${city}, ${province}, Pakistan. Hazard focus: ${hazard}. Step: ${stepTitle}. Details: ${stepDescription}. Show realistic field workers, materials, and clear sequence visuals.`
-
-      const generated = await openai.images.generate({
-        model: 'gpt-image-1',
-        prompt,
-        size: '1024x1024',
-      })
-
-      const b64 = generated.data?.[0]?.b64_json
-      if (!b64) continue
-
-      images.push({
-        stepTitle,
-        prompt,
-        imageDataUrl: `data:image/png;base64,${b64}`,
-      })
-    }
+    const images = generateGuidanceStepImagesMl({
+      province,
+      city,
+      hazard,
+      structureType,
+      steps,
+    })
 
     res.json({ images })
   } catch (error) {
