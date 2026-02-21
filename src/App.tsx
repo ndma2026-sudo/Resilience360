@@ -1076,19 +1076,21 @@ function App() {
     setBestPracticeVisibleCount(2)
   }, [bestPracticeHazard])
 
-  const generateApplyAreaGuidance = async () => {
+  const generateApplyAreaGuidance = async (bestPracticeNameOverride?: string) => {
     setGuidanceError(null)
     setConstructionGuidance(null)
     setGuidanceStepImages([])
     setIsGeneratingGuidance(true)
 
     try {
+      const selectedBestPracticeName = bestPracticeNameOverride ?? applyBestPracticeTitle
+
       const guidance = await generateConstructionGuidance({
         province: applyProvince,
         city: applyCity,
         hazard: applyHazard,
         structureType,
-        bestPracticeName: applyBestPracticeTitle,
+        bestPracticeName: selectedBestPracticeName,
       })
 
       setConstructionGuidance(guidance)
@@ -1100,7 +1102,7 @@ function App() {
           city: applyCity,
           hazard: applyHazard,
           structureType,
-          bestPracticeName: applyBestPracticeTitle,
+          bestPracticeName: selectedBestPracticeName,
           steps: guidance.steps,
         })
         setGuidanceStepImages(imageResult.images)
@@ -1111,6 +1113,13 @@ function App() {
       setGuidanceError(error instanceof Error ? error.message : 'Guidance generation failed.')
     } finally {
       setIsGeneratingGuidance(false)
+    }
+  }
+
+  const handleApplyBestPracticeChange = (nextBestPractice: string) => {
+    setApplyBestPracticeTitle(nextBestPractice)
+    if (!isGeneratingGuidance) {
+      void generateApplyAreaGuidance(nextBestPractice)
     }
   }
 
@@ -3484,7 +3493,7 @@ function App() {
             </label>
             <label>
               Best Practice
-              <select value={applyBestPracticeTitle} onChange={(event) => setApplyBestPracticeTitle(event.target.value)}>
+              <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
                 {availableApplyBestPractices.map((item) => (
                   <option key={item.title} value={item.title}>{item.title}</option>
                 ))}
@@ -3510,7 +3519,7 @@ function App() {
             )}
           </div>
 
-          <button onClick={generateApplyAreaGuidance} disabled={isGeneratingGuidance}>
+          <button onClick={() => { void generateApplyAreaGuidance() }} disabled={isGeneratingGuidance}>
             {isGeneratingGuidance ? '⚡ Generating Construction Guidance + Images...' : '🛠️ Construction Guidance'}
           </button>
 
