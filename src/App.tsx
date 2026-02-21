@@ -3489,7 +3489,7 @@ function App() {
           </div>
 
           <button onClick={generateApplyAreaGuidance} disabled={isGeneratingGuidance}>
-            {isGeneratingGuidance ? '🧠 Running Local ML Guidance + Images...' : '🛠️ Generate ML Construction Guidance'}
+            {isGeneratingGuidance ? '🧠 Running Local ML Guidance + Images...' : '🛠️ Construction Guidance'}
           </button>
 
           {guidanceError && <p>{guidanceError}</p>}
