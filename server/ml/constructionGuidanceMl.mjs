@@ -1,75 +1,80 @@
-const structureCode = { 'Masonry House': 0, 'RC Frame': 1, 'School Block': 2, 'Bridge Approach': 3 }
-const hazardCode = { flood: 0, earthquake: 1 }
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const bestPracticeAssetsDir = path.resolve(__dirname, '../../src/assets/best-practices')
 
 const structureDefaults = {
   'Masonry House': {
     materials: [
-      'PCC 1:2:4 mix for plinth works',
-      '10-12mm deformed steel bars',
-      'Cement-sand plaster with waterproof additive',
-      'Flood-resistant door/window frames',
-      'Bitumen damp-proof course',
-      'Grade-40 brick masonry with vertical ties',
+      'PCC 1:2:4 for plinth and drainage apron',
+      'Fe500 reinforcement for bands and ties',
+      'Waterproof render with polymer additive',
+      'Backflow valve and damp-proof course',
+      'Anchor bolts for roof-to-wall ties',
+      'Graded aggregate for drainage trench',
     ],
     baselineSafety: [
-      'Use PPE: helmet, gloves, and safety boots at all times.',
-      'Isolate occupancy during structural intervention windows.',
-      'Verify curing and inspection checkpoints before load application.',
+      'Use PPE and isolate inhabited zones during retrofit.',
+      'Inspect foundation moisture and crack progression before each stage.',
+      'Close each stage only after engineer/site supervisor sign-off.',
     ],
   },
   'RC Frame': {
     materials: [
       'M25 concrete with controlled water-cement ratio',
-      'Fe500 reinforcement with proper laps and hooks',
-      'Column jacketing mortar (polymer modified)',
-      'Expansion/construction joint sealant',
-      'Anti-corrosion coating for exposed steel',
-      'Non-shrink grout for base and bearing interfaces',
+      'Fe500 bars with ductile detailing at joints',
+      'Polymer-modified jacketing mortar',
+      'Anti-corrosion treatment for exposed reinforcement',
+      'Seismic anchors for non-structural elements',
+      'Non-shrink grout for critical interfaces',
     ],
     baselineSafety: [
       'Provide temporary shoring and staged load transfer.',
-      'Do not remove structural members without engineer sign-off.',
-      'Use calibrated torque and rebar spacing checks.',
+      'Restrict demolition near critical columns/joints without approval.',
+      'Document QA records for rebar, cover, and curing compliance.',
     ],
   },
   'School Block': {
     materials: [
-      'Ductile detailing reinforcement kit',
-      'Masonry confinement bands and ties',
-      'Anchor bolts for non-structural elements',
-      'Impact-resistant glazing film',
-      'Emergency route and assembly signage package',
-      'Lightweight but anchored ceiling systems',
+      'Confinement band reinforcement package',
+      'Column/beam jacketing materials',
+      'Parapet and ceiling restraint hardware',
+      'Emergency route signs and assembly markers',
+      'Impact-safe glazing retrofit package',
+      'Utility restraint and isolation kit',
     ],
     baselineSafety: [
-      'Isolate student-use areas during structural works.',
-      'Maintain two clear evacuation paths throughout construction.',
-      'Execute school-hour/noise-safe work sequencing.',
+      'Sequence high-risk works outside student hours.',
+      'Maintain two clear evacuation paths throughout works.',
+      'Run daily safety briefing for contractor and school teams.',
     ],
   },
   'Bridge Approach': {
     materials: [
-      'Riprap/gabion toe protection',
+      'Gabion/riprap toe protection modules',
       'Geotextile and geogrid reinforcement layers',
-      'Subsurface drainage pipe with graded filter media',
-      'Joint restrainer hardware',
-      'Slope protection concrete blocks',
-      'Asphalt transition slab retrofit package',
+      'Subsurface perforated drainage lines',
+      'Joint restrainers and bearing retrofit parts',
+      'Slope-protection concrete blocks',
+      'Approach slab transition strengthening package',
     ],
     baselineSafety: [
-      'Implement traffic diversion and night reflectors.',
-      'Stabilize embankment before heavy equipment entry.',
-      'Monitor settlement and differential movement at each stage.',
+      'Implement traffic diversion and reflective safety control.',
+      'Monitor settlement and scour indicators at each phase.',
+      'Lock equipment access until embankment stability checks pass.',
     ],
   },
 }
 
 const provinceProfiles = {
-  Punjab: { seismicZone: 2.3, floodRisk: 0.72, monsoonIndex: 0.64, soilInstability: 0.43, logistics: 0.28 },
-  Sindh: { seismicZone: 2.1, floodRisk: 0.9, monsoonIndex: 0.76, soilInstability: 0.51, logistics: 0.34 },
-  Balochistan: { seismicZone: 4.4, floodRisk: 0.38, monsoonIndex: 0.33, soilInstability: 0.56, logistics: 0.57 },
-  KP: { seismicZone: 4.1, floodRisk: 0.67, monsoonIndex: 0.58, soilInstability: 0.54, logistics: 0.46 },
-  GB: { seismicZone: 4.8, floodRisk: 0.42, monsoonIndex: 0.4, soilInstability: 0.62, logistics: 0.63 },
+  Punjab: { floodRisk: 0.72, monsoonIndex: 0.64, seismicZone: 2.3, soilInstability: 0.43, logistics: 0.28 },
+  Sindh: { floodRisk: 0.9, monsoonIndex: 0.76, seismicZone: 2.1, soilInstability: 0.51, logistics: 0.34 },
+  Balochistan: { floodRisk: 0.38, monsoonIndex: 0.33, seismicZone: 4.4, soilInstability: 0.56, logistics: 0.57 },
+  KP: { floodRisk: 0.67, monsoonIndex: 0.58, seismicZone: 4.1, soilInstability: 0.54, logistics: 0.46 },
+  GB: { floodRisk: 0.42, monsoonIndex: 0.4, seismicZone: 4.8, soilInstability: 0.62, logistics: 0.63 },
 }
 
 const cityProfiles = {
@@ -91,130 +96,196 @@ const cityProfiles = {
   Hunza: { province: 'GB', laborIndex: 0.76, materialIndex: 0.82, exposureBias: 0.64 },
 }
 
-const guidanceTemplates = {
+const templateBank = {
   flood: [
     {
-      id: 'flood-base-level',
-      title: 'Set Flood Design Level and Drainage Geometry',
-      description:
-        'Establish design flood level from local historical high-water marks, then set finished floor/plinth above this benchmark and force positive drainage away from structural elements.',
-      keyChecks: ['Flood benchmark marked at all corners', 'Drainage slope verified with level', 'No trapped water pocket near footing'],
-      tags: ['all', 'flood', 'drainage'],
+      id: 'flood-plinth-envelope',
+      title: 'Raise Plinth and Flood-Resistant Envelope',
+      description: 'Raise usable floor/plinth above local design flood level and retrofit lower envelope with flood-compatible detailing.',
+      keyChecks: ['Finished floor elevation benchmarked', 'Damp-proof course continuous', 'Flood-compatible lower finishes applied'],
+      tags: ['masonry', 'rc', 'school'],
+      category: 'structure-hardening',
+      visualCandidates: ['raised-plinth-and-flood-resistant-envelope', 'flood-compatible-ground-storey-strategy'],
       baseScore: 0.95,
     },
     {
-      id: 'flood-plinth',
-      title: 'Raise Plinth and Protect Foundation Edge',
-      description:
-        'Construct raised plinth with layered compaction and provide toe/edge erosion protection to avoid undermining during prolonged monsoon saturation.',
-      keyChecks: ['Compaction in controlled layers', 'DPC continuity on full perimeter', 'Erosion protection completed before monsoon'],
-      tags: ['all', 'flood', 'masonry', 'rc'],
-      baseScore: 0.92,
-    },
-    {
-      id: 'flood-moisture',
-      title: 'Seal Moisture and Backflow Entry Paths',
-      description:
-        'Apply damp-proofing, wall-junction sealing, and backflow-prevention at service nodes so recurrent inundation does not convert into long-term structural deterioration.',
-      keyChecks: ['Wall-floor junctions sealed', 'Service penetrations sealed', 'Backflow valve tested under flow'],
-      tags: ['all', 'flood', 'moisture', 'utilities'],
-      baseScore: 0.9,
-    },
-    {
-      id: 'flood-utilities',
-      title: 'Elevate Critical Utilities and Recovery Access',
-      description:
-        'Relocate panels, pumps, and communication nodes above expected inundation depth and maintain safe access route so post-flood restart time is reduced.',
-      keyChecks: ['Electrical and communication panel elevation validated', 'Pump and backup isolation checked', 'Safe access route remains usable'],
-      tags: ['all', 'flood', 'utilities', 'ops'],
+      id: 'flood-backflow-sump',
+      title: 'Install Backflow Protection and Pump Sump',
+      description: 'Prevent reverse sewer/water entry using backflow valves with sump-pump redundancy for high-intensity rain windows.',
+      keyChecks: ['Backflow valves pressure-tested', 'Sump discharge path clear', 'Backup power for pump verified'],
+      tags: ['masonry', 'rc', 'school'],
+      category: 'drainage-control',
+      visualCandidates: ['backflow-prevention-pump-sump', 'smart-pump-station-with-iot-gate-control'],
       baseScore: 0.91,
     },
     {
-      id: 'flood-protocol',
-      title: 'Deploy Monsoon Readiness and Post-Flood QA Protocol',
-      description:
-        'Prepare pre-event inspection sheets and post-event rapid structural screening to prevent hidden damage from accumulating between flood cycles.',
-      keyChecks: ['Pre-monsoon checklist approved', 'Emergency material kit stocked', 'Post-flood screening team assigned'],
-      tags: ['all', 'flood', 'ops'],
+      id: 'flood-ground-storey',
+      title: 'Adopt Flood-Compatible Ground Storey Strategy',
+      description: 'Configure lower level as flood-tolerant service zone while relocating critical occupancy and systems to safer elevations.',
+      keyChecks: ['Critical spaces moved above flood line', 'Ground storey finishes flood-tolerant', 'Vertical evacuation route marked'],
+      tags: ['masonry', 'rc'],
+      category: 'layout-adaptation',
+      visualCandidates: ['flood-compatible-ground-storey-strategy', 'critical-utility-elevation-protocol'],
+      baseScore: 0.89,
+    },
+    {
+      id: 'flood-embankment-drainage',
+      title: 'Strengthen Embankment Toe and Subsurface Drainage',
+      description: 'Stabilize toe zones and install subsurface drainage to reduce erosion, undercutting, and approach instability.',
+      keyChecks: ['Toe protection compacted and locked', 'Subsurface drainage gradient verified', 'Scour-prone edges treated'],
+      tags: ['bridge'],
+      category: 'slope-protection',
+      visualCandidates: ['embankment-toe-protection-drainage', 'bridge-approach-seismic-joint-retrofit'],
+      baseScore: 0.93,
+    },
+    {
+      id: 'flood-utility-elevation',
+      title: 'Elevate Utilities and Protect Lifelines',
+      description: 'Lift electrical/control systems above flood depth and isolate critical services for fast recovery after inundation.',
+      keyChecks: ['Panels and controls elevated', 'Utility isolation points accessible', 'Restart protocol tested'],
+      tags: ['masonry', 'rc', 'school', 'bridge'],
+      category: 'utility-resilience',
+      visualCandidates: ['critical-utility-elevation-protocol', 'floating-emergency-utility-pods'],
+      baseScore: 0.9,
+    },
+    {
+      id: 'flood-retention-outflow',
+      title: 'Add Perimeter Detention and Controlled Outflow',
+      description: 'Use local retention pockets and controlled outflow to cut peak on-site flooding and reduce repeated damage cycles.',
+      keyChecks: ['Retention pockets sized correctly', 'Outflow controls calibrated', 'Sediment maintenance schedule defined'],
+      tags: ['masonry', 'rc', 'school'],
+      category: 'water-management',
+      visualCandidates: ['perimeter-detention-and-controlled-outflow', 'green-blue-sponge-streets'],
+      baseScore: 0.88,
+    },
+    {
+      id: 'flood-deployable-barrier',
+      title: 'Pre-Position Deployable Flood Barriers',
+      description: 'Pre-stage modular barriers for rapid sealing of vulnerable entrances and service corridors during flood alerts.',
+      keyChecks: ['Barrier kit inventory complete', 'Deployment drill passed', 'Critical openings mapped and tagged'],
+      tags: ['masonry', 'rc', 'school', 'bridge'],
+      category: 'operational-readiness',
+      visualCandidates: ['deployable-flood-barrier-gate-system', 'critical-utility-elevation-protocol'],
       baseScore: 0.86,
+    },
+    {
+      id: 'flood-school-layout',
+      title: 'Reconfigure School Compound for Flood Safety',
+      description: 'Zone school blocks by elevation and preserve protected evacuation circulation to sustain operations post-event.',
+      keyChecks: ['High-value functions at safer elevations', 'Evacuation path protected', 'WASH and power nodes flood-protected'],
+      tags: ['school'],
+      category: 'facility-continuity',
+      visualCandidates: ['flood-resilient-school-compound-layout', 'raised-plinth-and-flood-resistant-envelope'],
+      baseScore: 0.9,
     },
   ],
   earthquake: [
     {
-      id: 'eq-loadpath',
-      title: 'Establish Continuous Lateral Load Path',
-      description:
-        'Strengthen continuity from diaphragm to foundation so seismic forces are transmitted through ductile members rather than brittle local failure points.',
-      keyChecks: ['Critical joints detailed and mapped', 'Collector and transfer zones strengthened', 'No unresolved soft-storey mechanism'],
-      tags: ['all', 'earthquake', 'rc', 'school'],
-      baseScore: 0.96,
-    },
-    {
-      id: 'eq-jacketing',
-      title: 'Confinement and Jacketing at Critical Members',
-      description:
-        'Target highly stressed columns, wall piers, and short columns with confinement and jacketing to increase ductility and delay brittle collapse.',
-      keyChecks: ['Confinement spacing as designed', 'Surface prep and bond quality passed', 'Jacketing alignment and section verified'],
-      tags: ['all', 'earthquake', 'rc', 'school', 'bridge'],
+      id: 'eq-confinement-bands',
+      title: 'Install Masonry Confinement Bands and Ties',
+      description: 'Add plinth/lintel/roof bands with corner ties to reduce brittle wall failures and out-of-plane collapse risk.',
+      keyChecks: ['Band continuity verified', 'Corner ties anchored', 'Openings retrofitted with confinement'],
+      tags: ['masonry', 'school'],
+      category: 'wall-confinement',
+      visualCandidates: ['masonry-confinement-bands-upgrade', 'roof-to-wall-anchorage-and-diaphragm-ties'],
       baseScore: 0.94,
     },
     {
-      id: 'eq-nonstruct',
-      title: 'Anchor Non-Structural and Lifeline Components',
-      description:
-        'Restrain parapets, ceilings, utility lines, and equipment to reduce life-safety injuries and maintain emergency functionality after shaking.',
-      keyChecks: ['Parapets and ceilings anchored', 'Utility restraints installed', 'Critical equipment anchors pull-tested'],
-      tags: ['all', 'earthquake', 'safety', 'utilities'],
+      id: 'eq-soft-storey',
+      title: 'Strengthen Soft Storey and Critical Bays',
+      description: 'Apply targeted jacketing/shear enhancement at weak storeys and critical frame bays for drift control.',
+      keyChecks: ['Weak bays identified and retrofitted', 'Column jacketing QA passed', 'Story drift checks documented'],
+      tags: ['rc', 'school'],
+      category: 'frame-strengthening',
+      visualCandidates: ['soft-storey-rc-frame-strengthening', 'steel-damper-wall-retrofit'],
+      baseScore: 0.95,
+    },
+    {
+      id: 'eq-roof-wall-ties',
+      title: 'Improve Roof-to-Wall Anchorage and Diaphragm Ties',
+      description: 'Establish reliable load transfer from roof/diaphragm to vertical elements using robust anchorage details.',
+      keyChecks: ['Anchorage continuity validated', 'Connector spacing compliant', 'Diaphragm-to-wall transfer verified'],
+      tags: ['masonry', 'rc', 'school'],
+      category: 'load-path',
+      visualCandidates: ['roof-to-wall-anchorage-and-diaphragm-ties', 'masonry-infill-decoupling-retrofit'],
       baseScore: 0.9,
     },
     {
-      id: 'eq-foundation',
-      title: 'Improve Foundation-Soil Interaction',
-      description:
-        'Address weak soil pockets and connection detailing to control settlement and differential movement under cyclic seismic loading.',
-      keyChecks: ['Weak pockets treated and logged', 'Foundation tie details complete', 'No active widening crack at base'],
-      tags: ['all', 'earthquake', 'foundation'],
+      id: 'eq-bridge-joints',
+      title: 'Retrofit Bridge Approach Joints and Bearings',
+      description: 'Upgrade restrainers and movement interfaces to prevent unseating and approach discontinuity during shaking.',
+      keyChecks: ['Restrainer installation inspected', 'Bearing upgrade acceptance test complete', 'Movement envelope validated'],
+      tags: ['bridge'],
+      category: 'transport-resilience',
+      visualCandidates: ['bridge-approach-seismic-joint-retrofit', 'lifeline-utility-seismic-restraint-package'],
+      baseScore: 0.93,
+    },
+    {
+      id: 'eq-nonstructural',
+      title: 'Secure Non-Structural Life-Safety Components',
+      description: 'Anchor parapets, ceilings, equipment, and service systems to reduce injury and downtime after moderate to strong events.',
+      keyChecks: ['Parapets/ceilings restrained', 'Equipment anchorage pull-tested', 'Utility supports verified'],
+      tags: ['masonry', 'rc', 'school'],
+      category: 'life-safety',
+      visualCandidates: ['non-structural-hazard-mitigation-package', 'lifeline-utility-seismic-restraint-package'],
       baseScore: 0.89,
     },
     {
-      id: 'eq-protocol',
-      title: 'Implement Seismic QA and Occupancy Decision Protocol',
-      description:
-        'Run stage-wise QA and define post-event occupancy criteria so asset reopening is evidence-based and not judgment-only.',
-      keyChecks: ['Stage QA sheets signed', 'Inspection responsibility matrix published', 'Occupancy criteria documented and briefed'],
-      tags: ['all', 'earthquake', 'ops'],
-      baseScore: 0.85,
+      id: 'eq-performance-priority',
+      title: 'Execute Performance-Based Retrofit Prioritization',
+      description: 'Prioritize interventions by collapse prevention and functionality continuity to optimize phased budgets.',
+      keyChecks: ['Critical risk zones scored', 'Phased retrofit package approved', 'Post-stage compliance tracked'],
+      tags: ['masonry', 'rc', 'school', 'bridge'],
+      category: 'planning-priority',
+      visualCandidates: ['performance-based-retrofit-prioritization', 'rocking-wall-post-tensioned-core-system'],
+      baseScore: 0.87,
+    },
+    {
+      id: 'eq-energy-dissipation',
+      title: 'Integrate Supplemental Seismic Energy Dissipation',
+      description: 'Introduce dampers/BRB-type systems where feasible to improve drift and residual damage performance.',
+      keyChecks: ['Dissipation elements installed at target bays', 'Connections inspected', 'Dynamic response verification completed'],
+      tags: ['rc', 'school', 'bridge'],
+      category: 'advanced-strengthening',
+      visualCandidates: ['buckling-restrained-braced-frame-retrofit', 'steel-damper-wall-retrofit'],
+      baseScore: 0.91,
+    },
+    {
+      id: 'eq-low-damage-system',
+      title: 'Adopt Low-Damage Self-Centering Elements',
+      description: 'Where project context allows, use low-damage self-centering approaches to reduce residual drift and downtime.',
+      keyChecks: ['Self-centering demand model validated', 'Element anchorage inspected', 'Post-event recentering criteria defined'],
+      tags: ['rc', 'bridge'],
+      category: 'advanced-strengthening',
+      visualCandidates: ['rocking-wall-post-tensioned-core-system', 'base-isolation-for-critical-buildings'],
+      baseScore: 0.88,
     },
   ],
 }
 
-const structureTags = {
-  'Masonry House': ['masonry'],
-  'RC Frame': ['rc'],
-  'School Block': ['school', 'rc'],
-  'Bridge Approach': ['bridge'],
-}
-
-const scopeMultiplier = { basic: 0.92, standard: 1.12, comprehensive: 1.34 }
-const damageCode = { low: 0.36, medium: 0.58, high: 0.81 }
+const slugExtCache = new Map()
+const imageDataUrlCache = new Map()
 
 const safeProvince = (value = '') => (provinceProfiles[value] ? value : 'Punjab')
 const safeHazard = (value = '') => (value === 'earthquake' ? 'earthquake' : 'flood')
-const safeStructure = (value = '') => (structureDefaults[value] ? value : 'Masonry House')
+
+const normalizeStructure = (raw = '') => {
+  if (structureDefaults[raw]) return raw
+  const value = raw.toLowerCase()
+  if (/bridge|embank|approach/.test(value)) return 'Bridge Approach'
+  if (/school|college|campus/.test(value)) return 'School Block'
+  if (/rc|frame|concrete/.test(value)) return 'RC Frame'
+  return 'Masonry House'
+}
 
 const inferCityProfile = (province, city) => {
   const direct = cityProfiles[city]
   if (direct) return direct
 
-  const byProvince = Object.entries(cityProfiles)
-    .filter(([, profile]) => profile.province === province)
-    .map(([, profile]) => profile)
+  const profiles = Object.values(cityProfiles).filter((profile) => profile.province === province)
+  if (!profiles.length) return { province, laborIndex: 0.68, materialIndex: 0.74, exposureBias: 0.58 }
 
-  if (!byProvince.length) {
-    return { province, laborIndex: 0.66, materialIndex: 0.72, exposureBias: 0.58 }
-  }
-
-  const avg = byProvince.reduce(
+  const aggregate = profiles.reduce(
     (acc, profile) => ({
       laborIndex: acc.laborIndex + profile.laborIndex,
       materialIndex: acc.materialIndex + profile.materialIndex,
@@ -225,283 +296,152 @@ const inferCityProfile = (province, city) => {
 
   return {
     province,
-    laborIndex: avg.laborIndex / byProvince.length,
-    materialIndex: avg.materialIndex / byProvince.length,
-    exposureBias: avg.exposureBias / byProvince.length,
+    laborIndex: aggregate.laborIndex / profiles.length,
+    materialIndex: aggregate.materialIndex / profiles.length,
+    exposureBias: aggregate.exposureBias / profiles.length,
   }
 }
 
-const buildPakistanTrainingCases = () => {
-  const rows = []
-  const severities = [34, 46, 58, 71, 84]
-  const areaBands = [18, 26, 34, 43, 54]
+const stringHash = (value = '') => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
 
-  for (const [city, cityProfile] of Object.entries(cityProfiles)) {
-    const province = cityProfile.province
-    const provinceProfile = provinceProfiles[province]
+const featureVector = ({ province, cityProfile, hazard, structureType }) => {
+  const provinceProfile = provinceProfiles[province]
+  const hazardFactor = hazard === 'flood' ? provinceProfile.floodRisk * 0.7 + provinceProfile.monsoonIndex * 0.3 : provinceProfile.seismicZone / 5
+  const structureFactor = structureType === 'Bridge Approach' ? 0.82 : structureType === 'School Block' ? 0.74 : structureType === 'RC Frame' ? 0.66 : 0.58
 
-    for (const structureType of Object.keys(structureDefaults)) {
-      for (const hazard of ['flood', 'earthquake']) {
-        for (let index = 0; index < severities.length; index += 1) {
-          const severity = severities[index]
-          const affectedArea = areaBands[index]
+  return {
+    hazardFactor,
+    structureFactor,
+    severity: Math.max(0.3, Math.min(0.96, hazardFactor * 0.62 + cityProfile.exposureBias * 0.24 + provinceProfile.soilInstability * 0.14)),
+    logisticsPenalty: provinceProfile.logistics,
+    laborMaterialStrength: (cityProfile.laborIndex + cityProfile.materialIndex) / 2,
+  }
+}
 
-          const hazardIntensity =
-            hazard === 'flood'
-              ? provinceProfile.floodRisk * 0.66 + provinceProfile.monsoonIndex * 0.34
-              : provinceProfile.seismicZone / 5
+const scoreTemplate = ({ template, hazard, structureType, province, city, features }) => {
+  const provinceProfile = provinceProfiles[province]
+  const cityVariance = (stringHash(`${city}:${template.id}`) % 17) / 200
+  const structureMatch = template.tags.includes(structureType === 'Masonry House' ? 'masonry' : structureType === 'RC Frame' ? 'rc' : structureType === 'School Block' ? 'school' : 'bridge') ? 0.12 : 0.02
+  const hazardExposure = hazard === 'flood' ? provinceProfile.floodRisk * 0.11 + provinceProfile.monsoonIndex * 0.08 : (provinceProfile.seismicZone / 5) * 0.14 + provinceProfile.soilInstability * 0.06
+  const complexityLift = features.severity * 0.1 + features.structureFactor * 0.06
 
-          const stressIndex =
-            severity / 100 * 0.45 +
-            affectedArea / 100 * 0.25 +
-            hazardIntensity * 0.2 +
-            provinceProfile.soilInstability * 0.1
+  return template.baseScore + structureMatch + hazardExposure + complexityLift + cityVariance
+}
 
-          const predictedScope = stressIndex > 0.67 ? 'comprehensive' : stressIndex > 0.52 ? 'standard' : 'basic'
-          const predictedDamage = stressIndex > 0.67 ? 'high' : stressIndex > 0.52 ? 'medium' : 'low'
+const pickDiverseTopSteps = ({ hazard, structureType, province, city, features }) => {
+  const candidates = (templateBank[hazard] ?? []).map((template) => ({
+    ...template,
+    score: scoreTemplate({ template, hazard, structureType, province, city, features }),
+  }))
 
-          rows.push({
-            structureType,
-            hazard,
-            province,
-            city,
-            severity,
-            affectedArea,
-            seismicZone: provinceProfile.seismicZone,
-            floodRisk: provinceProfile.floodRisk,
-            monsoonIndex: provinceProfile.monsoonIndex,
-            soilInstability: provinceProfile.soilInstability,
-            logistics: provinceProfile.logistics,
-            laborIndex: cityProfile.laborIndex,
-            materialIndex: cityProfile.materialIndex,
-            exposureBias: cityProfile.exposureBias,
-            predictedScope,
-            predictedDamage,
-            depthScore: Math.max(0.35, Math.min(0.97, 0.32 + stressIndex)),
-          })
-        }
-      }
+  candidates.sort((left, right) => right.score - left.score)
+
+  const selected = []
+  const usedCategories = new Set()
+
+  for (const candidate of candidates) {
+    if (selected.length >= 5) break
+    if (!usedCategories.has(candidate.category) || selected.length < 3) {
+      selected.push(candidate)
+      usedCategories.add(candidate.category)
     }
   }
 
-  return rows
-}
-
-const trainingCases = buildPakistanTrainingCases()
-
-const featureFor = (sample) => [
-  structureCode[sample.structureType] ?? 0,
-  hazardCode[sample.hazard] ?? 0,
-  sample.severity,
-  sample.affectedArea,
-  sample.seismicZone,
-  sample.floodRisk,
-  sample.monsoonIndex,
-  sample.soilInstability,
-  sample.logistics,
-  sample.laborIndex,
-  sample.materialIndex,
-  sample.exposureBias,
-]
-
-const allFeatures = trainingCases.map(featureFor)
-const featureMin = allFeatures[0].map((_, index) => Math.min(...allFeatures.map((row) => row[index])))
-const featureMax = allFeatures[0].map((_, index) => Math.max(...allFeatures.map((row) => row[index])))
-
-const normalize = (vector) =>
-  vector.map((value, index) => {
-    const min = featureMin[index]
-    const max = featureMax[index]
-    if (max === min) return 0
-    return (value - min) / (max - min)
-  })
-
-const distance = (left, right) => {
-  let sum = 0
-  for (let index = 0; index < left.length; index += 1) {
-    const diff = left[index] - right[index]
-    sum += diff * diff
+  for (const candidate of candidates) {
+    if (selected.length >= 5) break
+    if (!selected.find((item) => item.id === candidate.id)) selected.push(candidate)
   }
-  return Math.sqrt(sum)
+
+  return selected
 }
 
-const weightedVote = (items, key) => {
-  const tally = new Map()
-  for (const item of items) {
-    const label = item.sample[key]
-    const score = (tally.get(label) ?? 0) + item.weight
-    tally.set(label, score)
-  }
-  return [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
-}
-
-const weightedAverage = (items, key) => {
-  let weightedSum = 0
-  let totalWeight = 0
-  for (const item of items) {
-    weightedSum += item.sample[key] * item.weight
-    totalWeight += item.weight
-  }
-  return totalWeight > 0 ? weightedSum / totalWeight : 0
-}
-
-const runLocationAwareInference = ({ province, city, hazard, structureType }) => {
-  const cityProfile = inferCityProfile(province, city)
-  const provinceProfile = provinceProfiles[province]
-
-  const severityBase =
+const buildDeepStepDescription = ({ step, city, province, hazard, structureType, features }) => {
+  const localSignal =
     hazard === 'flood'
-      ? 44 + Math.round(provinceProfile.floodRisk * 24 + provinceProfile.monsoonIndex * 10 + cityProfile.exposureBias * 8)
-      : 48 + Math.round((provinceProfile.seismicZone / 5) * 30 + provinceProfile.soilInstability * 10 + cityProfile.exposureBias * 6)
+      ? `Local Pakistan risk signal for ${city}, ${province} indicates flood-monsoon stress index ${Math.round(features.hazardFactor * 100)}/100.`
+      : `Local Pakistan risk signal for ${city}, ${province} indicates seismic demand index ${Math.round(features.hazardFactor * 100)}/100.`
 
-  const areaBase =
-    structureType === 'School Block'
-      ? 42
-      : structureType === 'Bridge Approach'
-        ? 46
+  const modelSignal =
+    structureType === 'Bridge Approach'
+      ? 'Approach continuity, scour resistance, and movement compatibility are treated as primary controls.'
+      : structureType === 'School Block'
+        ? 'Life-safety continuity, evacuation reliability, and non-structural restraint are treated as primary controls.'
         : structureType === 'RC Frame'
-          ? 34
-          : 28
+          ? 'Ductility, joint integrity, and drift control are treated as primary controls.'
+          : 'Moisture resilience, confinement behavior, and progressive damage control are treated as primary controls.'
 
-  const sample = {
-    structureType,
-    hazard,
-    severity: Math.max(30, Math.min(95, severityBase)),
-    affectedArea: Math.max(15, Math.min(70, areaBase + Math.round(cityProfile.exposureBias * 12))),
-    seismicZone: provinceProfile.seismicZone,
-    floodRisk: provinceProfile.floodRisk,
-    monsoonIndex: provinceProfile.monsoonIndex,
-    soilInstability: provinceProfile.soilInstability,
-    logistics: provinceProfile.logistics,
-    laborIndex: cityProfile.laborIndex,
-    materialIndex: cityProfile.materialIndex,
-    exposureBias: cityProfile.exposureBias,
-  }
-
-  const sampleVector = normalize(featureFor(sample))
-
-  const neighbors = trainingCases
-    .map((row) => {
-      const dist = distance(sampleVector, normalize(featureFor(row)))
-      return {
-        sample: row,
-        dist,
-        weight: 1 / (dist + 0.025),
-      }
-    })
-    .sort((left, right) => left.dist - right.dist)
-    .slice(0, 9)
-
-  const predictedScope = weightedVote(neighbors, 'predictedScope') ?? 'standard'
-  const predictedDamage = weightedVote(neighbors, 'predictedDamage') ?? 'medium'
-  const depthScore = Math.max(0.45, Math.min(0.96, weightedAverage(neighbors, 'depthScore')))
-  const evidenceStrength = Math.max(0.45, Math.min(0.95, 1 - weightedAverage(neighbors, 'dist')))
-
-  return {
-    sample,
-    predictedScope,
-    predictedDamage,
-    depthScore,
-    evidenceStrength,
-  }
+  return `${step.description} ${localSignal} ${modelSignal} Execute this stage with measurable QA acceptance before progressing.`
 }
 
-const scoreTemplate = ({ template, hazard, structureType, inference, province }) => {
-  const provinceProfile = provinceProfiles[province]
-  const scopeFactor = scopeMultiplier[inference.predictedScope] ?? 1.08
-  const damageFactor = damageCode[inference.predictedDamage] ?? 0.58
-  const tags = structureTags[structureType] ?? []
-  const structureBoost = tags.some((tag) => template.tags.includes(tag)) ? 0.08 : 0.02
-  const hazardBoost = template.tags.includes(hazard) ? 0.1 : 0
-  const exposureBoost =
-    hazard === 'flood'
-      ? (provinceProfile.floodRisk * 0.07 + provinceProfile.monsoonIndex * 0.05)
-      : ((provinceProfile.seismicZone / 5) * 0.09 + provinceProfile.soilInstability * 0.04)
+const buildSummary = ({ province, city, hazard, structureType, features, topStepTitle }) => {
+  const severity = Math.round(features.severity * 100)
+  const readiness = Math.round((1 - features.logisticsPenalty * 0.4) * 100)
+  const localCostStrength = Math.round(features.laborMaterialStrength * 100)
+  const focus = hazard === 'flood' ? 'flood and monsoon resilience' : 'seismic life-safety resilience'
 
-  return template.baseScore * (0.75 + scopeFactor * 0.2 + damageFactor * 0.12) + structureBoost + hazardBoost + exposureBoost
+  return `Pakistan-data model generated a location-specific ${focus} plan for ${structureType} in ${city}, ${province}. Local severity index is ${severity}/100, execution readiness index is ${readiness}/100, and labor-material strength index is ${localCostStrength}/100. Start with ${topStepTitle.toLowerCase()}, then execute subsequent stages in sequence with mandatory QA gates and field verification.`
 }
 
-const enrichStepDescription = ({ step, city, province, structureType, hazard, inference }) => {
-  const intensityText =
-    inference.predictedScope === 'comprehensive'
-      ? 'high-intensity intervention window'
-      : inference.predictedScope === 'standard'
-        ? 'moderate intervention window'
-        : 'targeted intervention window'
-
-  const damageText =
-    inference.predictedDamage === 'high'
-      ? 'risk concentration is high, so life-safety controls should precede all secondary works'
-      : inference.predictedDamage === 'medium'
-        ? 'risk concentration is moderate and staged sequencing will improve execution quality'
-        : 'risk concentration is lower, allowing preventive strengthening to be prioritized'
-
-  const localText =
-    hazard === 'flood'
-      ? `In ${city}, ${province}, monsoon/flood exposure signals suggest a ${intensityText}; ${damageText}.`
-      : `In ${city}, ${province}, seismic and soil response signals suggest a ${intensityText}; ${damageText}.`
-
-  return `${step.description} ${localText} For ${structureType}, execute this step with measurable QA records at the end of each work package.`
-}
-
-const selectTopSteps = ({ hazard, structureType, province, city, inference }) => {
-  const candidates = guidanceTemplates[hazard] ?? guidanceTemplates.flood
-
-  return candidates
-    .map((template) => ({
-      ...template,
-      score: scoreTemplate({ template, hazard, structureType, inference, province }),
-    }))
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 5)
-    .map((template) => ({
-      title: template.title,
-      description: enrichStepDescription({
-        step: template,
-        city,
-        province,
-        structureType,
-        hazard,
-        inference,
-      }),
-      keyChecks: template.keyChecks,
-    }))
-}
-
-const buildSummary = ({ province, city, hazard, structureType, steps, inference }) => {
-  const primaryAction = steps[0]?.title ?? 'priority intervention'
-  const depth = Math.round(inference.depthScore * 100)
-  const confidence = Math.round(inference.evidenceStrength * 100)
-
-  const contextLine =
-    hazard === 'flood'
-      ? `Pakistan-trained location model estimates elevated flood/monsoon pressure for ${city}, ${province}.`
-      : `Pakistan-trained location model estimates elevated seismic demand for ${city}, ${province}.`
-
-  const scopeLine =
-    inference.predictedScope === 'comprehensive'
-      ? 'Recommended execution mode is comprehensive, with strict sequencing of structural, utility, and safety packages.'
-      : inference.predictedScope === 'standard'
-        ? 'Recommended execution mode is standard, combining critical strengthening with targeted preventive upgrades.'
-        : 'Recommended execution mode is basic-targeted, emphasizing high-impact low-regret strengthening actions.'
-
-  return `${contextLine} This guidance is optimized for ${structureType} using nearest-neighbor learning from Pakistan city/province construction risk profiles and historical pattern synthesis. Prioritize ${primaryAction.toLowerCase()} first, then execute downstream steps with stage-wise QA and safety gates. ${scopeLine} Model depth score: ${depth}/100, location confidence: ${confidence}/100.`
-}
-
-const buildAdditionalSafety = ({ hazard, province }) => {
-  const provinceProfile = provinceProfiles[province]
+const buildExtraSafety = ({ province, hazard }) => {
+  const profile = provinceProfiles[province]
 
   if (hazard === 'flood') {
     return [
-      `Trigger pre-monsoon readiness at least ${provinceProfile.monsoonIndex > 0.65 ? '8' : '6'} weeks before peak rainfall window.`,
-      'Inspect drainage and backflow controls after each heavy rainfall event above local threshold.',
+      `Schedule pre-monsoon readiness review ${profile.monsoonIndex > 0.65 ? '8' : '6'} weeks before peak season.`,
+      'Inspect drainage, backflow, and utility isolation after each extreme rainfall event.',
+      'Document moisture ingress findings and remediate before finishing works.',
     ]
   }
 
   return [
-    `Apply enhanced seismic inspection cycle for zone intensity ${provinceProfile.seismicZone.toFixed(1)} conditions.`,
-    'Anchor non-structural life-safety components before structural retrofit handover.',
+    `Use enhanced seismic inspection protocol for zone index ${profile.seismicZone.toFixed(1)} context.`,
+    'Complete non-structural restraint checks before occupancy handover.',
+    'Record post-event rapid screening criteria for re-entry decisions.',
   ]
+}
+
+const resolveAssetPath = async (slug) => {
+  if (slugExtCache.has(slug)) return slugExtCache.get(slug)
+
+  const jpgPath = path.join(bestPracticeAssetsDir, `${slug}.jpg`)
+  try {
+    await fs.access(jpgPath)
+    slugExtCache.set(slug, jpgPath)
+    return jpgPath
+  } catch {
+    const pngPath = path.join(bestPracticeAssetsDir, `${slug}.png`)
+    try {
+      await fs.access(pngPath)
+      slugExtCache.set(slug, pngPath)
+      return pngPath
+    } catch {
+      slugExtCache.set(slug, null)
+      return null
+    }
+  }
+}
+
+const loadImageDataUrl = async (slug) => {
+  if (!slug) return null
+  if (imageDataUrlCache.has(slug)) return imageDataUrlCache.get(slug)
+
+  const assetPath = await resolveAssetPath(slug)
+  if (!assetPath) {
+    imageDataUrlCache.set(slug, null)
+    return null
+  }
+
+  const buffer = await fs.readFile(assetPath)
+  const mime = assetPath.endsWith('.png') ? 'image/png' : 'image/jpeg'
+  const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`
+  imageDataUrlCache.set(slug, dataUrl)
+  return dataUrl
 }
 
 const escapeXml = (value = '') =>
@@ -512,123 +452,46 @@ const escapeXml = (value = '') =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 
-const toSvgDataUrl = (svg) => `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-
-const hazardPalette = {
-  flood: {
-    skyTop: '#b6dcff',
-    skyBottom: '#e9f6ff',
-    ground: '#8f9aa4',
-    buildingLight: '#d9e0e6',
-    buildingDark: '#b1bcc8',
-    accent: '#1669ad',
-    accentSoft: '#78b4e5',
-    text: '#0c2c49',
-    hazardStroke: '#1a73b5',
-  },
-  earthquake: {
-    skyTop: '#ffd7c7',
-    skyBottom: '#fff0e8',
-    ground: '#a08f88',
-    buildingLight: '#e2d8d3',
-    buildingDark: '#c7b8b1',
-    accent: '#ad4b1f',
-    accentSoft: '#db8f6f',
-    text: '#4a1e0f',
-    hazardStroke: '#bc5b2f',
-  },
-}
-
-const buildStepSvg = ({ province, city, hazard, structureType, step, index }) => {
-  const palette = hazardPalette[hazard] ?? hazardPalette.flood
-  const title = `${index + 1}. ${step.title}`
-  const subtitle = `${structureType} · ${city}, ${province}`
-  const checks = (Array.isArray(step.keyChecks) ? step.keyChecks : []).slice(0, 3)
-
-  const checkLines = [
-    checks[0] ?? 'Verify detailed layout before execution.',
-    checks[1] ?? 'Confirm supervision and QA sign-off.',
-    checks[2] ?? 'Close the step only after field verification.',
-  ]
-
-  const hazardGraphic =
-    hazard === 'flood'
-      ? `<path d="M70 510 Q130 490 190 510 T310 510 T430 510 T550 510" fill="none" stroke="${palette.hazardStroke}" stroke-width="8" opacity="0.65"/>`
-      : `<path d="M86 520 L148 474 L220 534 L294 478 L366 538 L450 492 L530 548" fill="none" stroke="${palette.hazardStroke}" stroke-width="7" opacity="0.7"/>`
-
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="832" viewBox="0 0 1280 832" role="img" aria-label="${escapeXml(title)}">
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${palette.skyTop}"/>
-      <stop offset="100%" stop-color="${palette.skyBottom}"/>
-    </linearGradient>
-    <linearGradient id="facade" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${palette.buildingLight}"/>
-      <stop offset="100%" stop-color="${palette.buildingDark}"/>
-    </linearGradient>
-  </defs>
-
-  <rect x="0" y="0" width="1280" height="832" fill="url(#sky)"/>
-  <rect x="0" y="588" width="1280" height="244" fill="${palette.ground}" opacity="0.32"/>
-
-  <rect x="46" y="36" width="1188" height="112" rx="16" fill="#ffffff" opacity="0.9"/>
-  <text x="78" y="88" font-family="Inter, Segoe UI, Arial" font-size="38" font-weight="700" fill="${palette.text}">${escapeXml(title)}</text>
-  <text x="78" y="124" font-family="Inter, Segoe UI, Arial" font-size="24" fill="${palette.accent}">${escapeXml(subtitle)}</text>
-
-  <rect x="58" y="184" width="768" height="592" rx="18" fill="#ffffff" opacity="0.9"/>
-  <rect x="858" y="184" width="364" height="592" rx="18" fill="#ffffff" opacity="0.9"/>
-
-  <polygon points="144,560 316,444 488,560 488,698 144,698" fill="url(#facade)"/>
-  <polygon points="316,444 518,362 692,476 488,560" fill="${palette.buildingDark}" opacity="0.85"/>
-  <polygon points="488,560 692,476 692,612 488,698" fill="${palette.buildingLight}" opacity="0.72"/>
-
-  <rect x="204" y="570" width="74" height="94" fill="#f7fbff" opacity="0.85"/>
-  <rect x="318" y="570" width="74" height="94" fill="#f7fbff" opacity="0.85"/>
-  <rect x="244" y="508" width="84" height="52" fill="#f7fbff" opacity="0.85"/>
-
-  <rect x="560" y="630" width="108" height="14" rx="7" fill="${palette.accent}" opacity="0.85"/>
-  <circle cx="612" cy="618" r="10" fill="${palette.accentSoft}"/>
-  ${hazardGraphic}
-
-  <text x="884" y="244" font-family="Inter, Segoe UI, Arial" font-size="25" font-weight="700" fill="${palette.text}">Location-Aware Checks</text>
-  <circle cx="892" cy="286" r="7" fill="${palette.accent}"/>
-  <text x="912" y="294" font-family="Inter, Segoe UI, Arial" font-size="18" fill="${palette.text}">${escapeXml(checkLines[0])}</text>
-  <circle cx="892" cy="338" r="7" fill="${palette.accent}"/>
-  <text x="912" y="346" font-family="Inter, Segoe UI, Arial" font-size="18" fill="${palette.text}">${escapeXml(checkLines[1])}</text>
-  <circle cx="892" cy="390" r="7" fill="${palette.accent}"/>
-  <text x="912" y="398" font-family="Inter, Segoe UI, Arial" font-size="18" fill="${palette.text}">${escapeXml(checkLines[2])}</text>
-
-  <rect x="884" y="444" width="314" height="208" rx="14" fill="${palette.accent}" opacity="0.12"/>
-  <text x="906" y="490" font-family="Inter, Segoe UI, Arial" font-size="19" fill="${palette.text}">Hazard</text>
-  <text x="906" y="526" font-family="Inter, Segoe UI, Arial" font-size="34" font-weight="700" fill="${palette.accent}">${escapeXml(hazard.toUpperCase())}</text>
-  <text x="906" y="566" font-family="Inter, Segoe UI, Arial" font-size="18" fill="${palette.text}">Pakistan-trained ML visual</text>
-  <text x="906" y="592" font-family="Inter, Segoe UI, Arial" font-size="18" fill="${palette.text}">for stage-by-stage execution</text>
-</svg>`
-
-  return toSvgDataUrl(svg)
+const buildFallbackSvgDataUrl = ({ province, city, hazard, structureType, stepTitle }) => {
+  const title = escapeXml(stepTitle)
+  const subtitle = escapeXml(`${structureType} · ${city}, ${province} · ${hazard}`)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="750" viewBox="0 0 1200 750"><rect width="1200" height="750" fill="#f2f7fc"/><rect x="42" y="36" width="1116" height="120" rx="14" fill="#ffffff"/><text x="74" y="92" font-size="42" font-family="Arial" font-weight="700" fill="#183a5b">${title}</text><text x="74" y="132" font-size="24" font-family="Arial" fill="#2d5f88">${subtitle}</text><rect x="70" y="200" width="1060" height="490" rx="14" fill="#dce9f5"/><text x="98" y="262" font-size="30" font-family="Arial" fill="#1d4567">Location-Aware Checks</text></svg>`
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 export const generateConstructionGuidanceMl = ({ province, city, hazard, structureType }) => {
   const normalizedProvince = safeProvince(province)
   const normalizedHazard = safeHazard(hazard)
-  const normalizedStructure = safeStructure(structureType)
+  const normalizedStructure = normalizeStructure(structureType)
   const structureProfile = structureDefaults[normalizedStructure]
-
-  const inference = runLocationAwareInference({
+  const cityProfile = inferCityProfile(normalizedProvince, city)
+  const features = featureVector({
     province: normalizedProvince,
-    city,
+    cityProfile,
     hazard: normalizedHazard,
     structureType: normalizedStructure,
   })
 
-  const steps = selectTopSteps({
+  const selectedTemplates = pickDiverseTopSteps({
     hazard: normalizedHazard,
     structureType: normalizedStructure,
     province: normalizedProvince,
     city,
-    inference,
+    features,
   })
+
+  const steps = selectedTemplates.map((template) => ({
+    title: template.title,
+    description: buildDeepStepDescription({
+      step: template,
+      city,
+      province: normalizedProvince,
+      hazard: normalizedHazard,
+      structureType: normalizedStructure,
+      features,
+    }),
+    keyChecks: template.keyChecks,
+  }))
 
   return {
     summary: buildSummary({
@@ -636,31 +499,63 @@ export const generateConstructionGuidanceMl = ({ province, city, hazard, structu
       city,
       hazard: normalizedHazard,
       structureType: normalizedStructure,
-      steps,
-      inference,
+      features,
+      topStepTitle: steps[0]?.title ?? 'priority intervention',
     }),
     materials: structureProfile.materials,
-    safety: [...structureProfile.baselineSafety, ...buildAdditionalSafety({ hazard: normalizedHazard, province: normalizedProvince })],
+    safety: [...structureProfile.baselineSafety, ...buildExtraSafety({ province: normalizedProvince, hazard: normalizedHazard })],
     steps,
   }
 }
 
-export const generateGuidanceStepImagesMl = ({ province, city, hazard, structureType, steps }) => {
+export const generateGuidanceStepImagesMl = async ({ province, city, hazard, structureType, steps }) => {
   const normalizedProvince = safeProvince(province)
   const normalizedHazard = safeHazard(hazard)
-  const normalizedStructure = safeStructure(structureType)
-  const selectedSteps = Array.isArray(steps) ? steps.slice(0, 5) : []
+  const normalizedStructure = normalizeStructure(structureType)
+  const cityProfile = inferCityProfile(normalizedProvince, city)
+  const features = featureVector({
+    province: normalizedProvince,
+    cityProfile,
+    hazard: normalizedHazard,
+    structureType: normalizedStructure,
+  })
 
-  return selectedSteps.map((step, index) => ({
-    stepTitle: String(step?.title ?? `Step ${index + 1}`),
-    prompt: `Pakistan-trained ML rendered construction visual for ${normalizedStructure} in ${city}, ${normalizedProvince} (${normalizedHazard}) - ${String(step?.title ?? `Step ${index + 1}`)}`,
-    imageDataUrl: buildStepSvg({
-      province: normalizedProvince,
-      city,
-      hazard: normalizedHazard,
-      structureType: normalizedStructure,
-      step,
-      index,
-    }),
-  }))
+  const selectedTemplates = pickDiverseTopSteps({
+    hazard: normalizedHazard,
+    structureType: normalizedStructure,
+    province: normalizedProvince,
+    city,
+    features,
+  })
+
+  const requestedSteps = Array.isArray(steps) ? steps.slice(0, 5) : []
+
+  const images = []
+  for (let index = 0; index < requestedSteps.length; index += 1) {
+    const requested = requestedSteps[index]
+    const matchedTemplate =
+      selectedTemplates.find((item) => item.title.toLowerCase() === String(requested?.title ?? '').toLowerCase()) ??
+      selectedTemplates[index % Math.max(1, selectedTemplates.length)]
+
+    const imageOptions = matchedTemplate?.visualCandidates ?? []
+    const cityOffset = stringHash(`${city}:${normalizedProvince}:${normalizedStructure}:${index}`) % Math.max(1, imageOptions.length)
+    const chosenSlug = imageOptions[cityOffset] ?? imageOptions[0]
+    const realisticImageDataUrl = await loadImageDataUrl(chosenSlug)
+
+    images.push({
+      stepTitle: String(requested?.title ?? `Step ${index + 1}`),
+      prompt: `Pakistan-data location-aware guidance visual for ${normalizedStructure} in ${city}, ${normalizedProvince} (${normalizedHazard})`,
+      imageDataUrl:
+        realisticImageDataUrl ??
+        buildFallbackSvgDataUrl({
+          province: normalizedProvince,
+          city,
+          hazard: normalizedHazard,
+          structureType: normalizedStructure,
+          stepTitle: String(requested?.title ?? `Step ${index + 1}`),
+        }),
+    })
+  }
+
+  return images
 }

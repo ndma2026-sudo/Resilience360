@@ -184,7 +184,7 @@ app.post('/api/guidance/step-images', async (req, res) => {
     const structureType = String(req.body.structureType ?? 'Masonry House')
     const steps = safeArray(req.body.steps).slice(0, 4)
 
-    const images = generateGuidanceStepImagesMl({
+    const images = await generateGuidanceStepImagesMl({
       province,
       city,
       hazard,
