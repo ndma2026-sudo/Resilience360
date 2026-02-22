@@ -1246,7 +1246,7 @@ function App() {
           let naturalWidth = img.naturalWidth || img.width
           let naturalHeight = img.naturalHeight || img.height
           // Web UI: width 100% (container), max-height 380px
-          const pxToMm = px => px * 25.4 / 96
+          const pxToMm = (px: number) => px * 25.4 / 96
           const maxWidthMm = contentWidth - 8
           const maxHeightPx = 380
           let imageWidthPx = naturalWidth
