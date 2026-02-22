@@ -2639,35 +2639,37 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
-                  </label>
-                  <label>
-                    District
-                    <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
-                      <option value="">Select District</option>
-                      {availableMapDistricts.map((district) => (
-                        <option key={district} value={district}>
-                          {district}
-                        </option>
-                      ))}
-                    </label>
-                    <label>
-                      Report Language
-                      <select
-                        value={districtReportLanguage}
-                        onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
-                      >
-                        <option>English</option>
-                        <option>Urdu</option>
-                      </select>
-                    </label>
-                    <label>
-                      Alert Window
-                      <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
-                        <option value="24h">Last 24h</option>
-                        <option value="7d">Last 7 days</option>
-                        <option value="ongoing">Ongoing</option>
-                      </select>
-                    </label>
+                  </select>
+                </label>
+                <label>
+                  District
+                  <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
+                    <option value="">Select District</option>
+                    {availableMapDistricts.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Report Language
+                  <select
+                    value={districtReportLanguage}
+                    onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
+                  >
+                    <option>English</option>
+                    <option>Urdu</option>
+                  </select>
+                </label>
+                <label>
+                  Alert Window
+                  <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
+                    <option value="24h">Last 24h</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="ongoing">Ongoing</option>
+                  </select>
+                </label>
                   </div>
                 </div>
               </div>
