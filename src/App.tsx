@@ -1132,17 +1132,17 @@ function App() {
       return image?.imageDataUrl || null
     })
     const preloadAndConvertImage = (url) => {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         if (!url) return resolve(null)
         const img = new window.Image()
         img.crossOrigin = 'Anonymous'
         img.onload = () => {
-          const canvas = document.createElement('canvas')
-          canvas.width = img.naturalWidth || img.width
-          canvas.height = img.naturalHeight || img.height
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(img, 0, 0)
           try {
+            const canvas = document.createElement('canvas')
+            canvas.width = img.naturalWidth || img.width
+            canvas.height = img.naturalHeight || img.height
+            const ctx = canvas.getContext('2d')
+            ctx.drawImage(img, 0, 0)
             const dataUrl = canvas.toDataURL('image/png')
             resolve({
               base64: dataUrl,
@@ -2639,37 +2639,35 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
-                  </select>
-                </label>
-                <label>
-                  District
-                  <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
-                    <option value="">Select District</option>
-                    {availableMapDistricts.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Report Language
-                  <select
-                    value={districtReportLanguage}
-                    onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
-                  >
-                    <option>English</option>
-                    <option>Urdu</option>
-                  </select>
-                </label>
-                <label>
-                  Alert Window
-                  <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
-                    <option value="24h">Last 24h</option>
-                    <option value="7d">Last 7 days</option>
-                    <option value="ongoing">Ongoing</option>
-                  </select>
-                </label>
+                  </label>
+                  <label>
+                    District
+                    <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
+                      <option value="">Select District</option>
+                      {availableMapDistricts.map((district) => (
+                        <option key={district} value={district}>
+                          {district}
+                        </option>
+                      ))}
+                    </label>
+                    <label>
+                      Report Language
+                      <select
+                        value={districtReportLanguage}
+                        onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
+                      >
+                        <option>English</option>
+                        <option>Urdu</option>
+                      </select>
+                    </label>
+                    <label>
+                      Alert Window
+                      <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
+                        <option value="24h">Last 24h</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="ongoing">Ongoing</option>
+                      </select>
+                    </label>
                   </div>
                 </div>
               </div>
