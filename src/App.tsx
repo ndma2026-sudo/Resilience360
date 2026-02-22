@@ -1123,8 +1123,41 @@ function App() {
     }
   }
 
-  const downloadApplyGuidanceReport = () => {
+  const downloadApplyGuidanceReport = async () => {
     if (!constructionGuidance) return
+
+    // Preload and convert all step images to base64 before PDF generation
+    const stepImages = constructionGuidance.steps.map((step, index) => {
+      const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
+      return image?.imageDataUrl || null
+    })
+    const preloadAndConvertImage = (url) => {
+      return new Promise((resolve, reject) => {
+        if (!url) return resolve(null)
+        const img = new window.Image()
+        img.crossOrigin = 'Anonymous'
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth || img.width
+          canvas.height = img.naturalHeight || img.height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0)
+          try {
+            const dataUrl = canvas.toDataURL('image/png')
+            resolve({
+              base64: dataUrl,
+              width: canvas.width,
+              height: canvas.height,
+            })
+          } catch (e) {
+            resolve(null)
+          }
+        }
+        img.onerror = () => resolve(null)
+        img.src = url
+      })
+    }
+    const preloadedImgs = await Promise.all(stepImages.map(url => preloadAndConvertImage(url)))
 
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -1150,21 +1183,20 @@ function App() {
       doc.roundedRect(margin, 12, contentWidth, 16, 2, 2, 'FD')
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(24, 66, 105)
-      doc.setFontSize(12)
+      doc.setFontSize(13)
       doc.text(continued ? 'Resilience360 Construction Guidance (Continued)' : 'Resilience360 Construction Guidance Report', margin + 3, 19)
       doc.setFont('helvetica', 'normal')
-      doc.setTextColor(60, 84, 107)
-      doc.setFontSize(9)
+      doc.setFontSize(9.5)
+      doc.setTextColor(46, 71, 93)
       doc.text(`${applyCity}, ${applyProvince} · Hazard: ${applyHazard} · Best Practice: ${applyBestPracticeTitle}`, margin + 3, 24)
-      cursorY = 34
     }
 
     const drawFooter = () => {
       doc.setDrawColor(221, 231, 241)
       doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3)
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(90, 104, 119)
+      doc.setFontSize(8.5)
+      doc.setTextColor(120, 80, 52)
       doc.text(`Generated: ${generatedAt}`, margin, footerY)
       doc.text(`Page ${pageNumber}`, pageWidth - margin, footerY, { align: 'right' })
     }
@@ -1207,7 +1239,8 @@ function App() {
     const drawStep = (
       step: { title: string; description: string; keyChecks: string[] },
       index: number,
-      imageDataUrl?: string,
+      imageDataUrl: string,
+      preloadedImg: HTMLImageElement,
     ) => {
       const keyChecks = step.keyChecks.map((item) => `- ${item}`)
       const stepLines = [step.description, 'Key Checks:', ...keyChecks]
@@ -1239,27 +1272,20 @@ function App() {
       }
 
       if (hasImage && imageDataUrl) {
-        // Match web UI: width 100% of content, max-height 380px, preserve aspect ratio
-        const img = new window.Image()
-        img.src = imageDataUrl
-        img.onload = () => {
-          let naturalWidth = img.naturalWidth || img.width
-          let naturalHeight = img.naturalHeight || img.height
-          // Web UI: width 100% (container), max-height 380px
-          const pxToMm = (px: number) => px * 25.4 / 96
+        if (preloadedImg && preloadedImg.base64) {
+          let naturalWidth = preloadedImg.width
+          let naturalHeight = preloadedImg.height
+          const pxToMm = (px) => px * 25.4 / 96
           const maxWidthMm = contentWidth - 8
           const maxHeightPx = 380
           let imageWidthPx = naturalWidth
           let imageHeightPx = naturalHeight
-          // Scale to fit width, then clamp height
           if (imageWidthPx > 0 && imageHeightPx > 0) {
-            // Scale to fit width
             if (imageWidthPx > (maxWidthMm * 96 / 25.4)) {
               const scale = (maxWidthMm * 96 / 25.4) / imageWidthPx
               imageWidthPx = imageWidthPx * scale
               imageHeightPx = imageHeightPx * scale
             }
-            // Clamp height
             if (imageHeightPx > maxHeightPx) {
               const scale = maxHeightPx / imageHeightPx
               imageWidthPx = imageWidthPx * scale
@@ -1269,20 +1295,18 @@ function App() {
           const imageWidthMm = pxToMm(imageWidthPx)
           const imageHeightMm = pxToMm(imageHeightPx)
           try {
-            doc.addImage(imageDataUrl, 'PNG', margin + 4, textY + 2, imageWidthMm, imageHeightMm)
+            doc.addImage(preloadedImg.base64, 'PNG', margin + 4, textY + 2, imageWidthMm, imageHeightMm)
           } catch {
             doc.setFontSize(9)
             doc.setTextColor(120, 80, 52)
             doc.text('Step image preview unavailable in PDF export.', margin + 4, textY + 7)
           }
-        }
-        img.onerror = () => {
+        } else {
           doc.setFontSize(9)
           doc.setTextColor(120, 80, 52)
           doc.text('Step image preview unavailable in PDF export.', margin + 4, textY + 7)
         }
       }
-
       cursorY += blockHeight + 4
     }
 
@@ -1302,7 +1326,7 @@ function App() {
 
     for (const [index, step] of constructionGuidance.steps.entries()) {
       const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
-      drawStep(step, index, image?.imageDataUrl)
+      drawStep(step, index, image?.imageDataUrl, image?.imageDataUrl)
     }
 
     drawFooter()
@@ -2615,37 +2639,37 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
-                  </select>
-                </label>
-                <label>
-                  District
-                  <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
-                    <option value="">Select District</option>
-                    {availableMapDistricts.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Report Language
-                  <select
-                    value={districtReportLanguage}
-                    onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
-                  >
-                    <option>English</option>
-                    <option>Urdu</option>
-                  </select>
-                </label>
-                <label>
-                  Alert Window
-                  <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
-                    <option value="24h">Last 24h</option>
-                    <option value="7d">Last 7 days</option>
-                    <option value="ongoing">Ongoing</option>
-                  </select>
-                </label>
+                  </label>
+                  <label>
+                    District
+                    <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
+                      <option value="">Select District</option>
+                      {availableMapDistricts.map((district) => (
+                        <option key={district} value={district}>
+                          {district}
+                        </option>
+                      ))}
+                    </label>
+                    <label>
+                      Report Language
+                      <select
+                        value={districtReportLanguage}
+                        onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
+                      >
+                        <option>English</option>
+                        <option>Urdu</option>
+                      </select>
+                    </label>
+                    <label>
+                      Alert Window
+                      <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
+                        <option value="24h">Last 24h</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="ongoing">Ongoing</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2960,229 +2984,226 @@ function App() {
                 {Object.keys(provinceRisk).map((province) => (
                   <option key={province}>{province}</option>
                 ))}
-              </select>
-            </label>
-            <label>
-              City
-              <select value={designCity} onChange={(event) => setDesignCity(event.target.value)}>
-                {availableDesignCities.map((city) => (
-                  <option key={city}>{city}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Soil Type
-              <select value={designSoilType} onChange={(event) => setDesignSoilType(event.target.value as typeof designSoilType)}>
-                <option>Rocky</option>
-                <option>Sandy</option>
-                <option>Clayey</option>
-                <option>Silty</option>
-                <option>Saline</option>
-              </select>
-            </label>
-            <label>
-              Humidity
-              <select value={designHumidity} onChange={(event) => setDesignHumidity(event.target.value as typeof designHumidity)}>
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="retrofit-insights-grid">
-            <p>
-              Seismic Zone: <strong>{designHazardOverlay.seismicZone} / 5</strong>
-            </p>
-            <p>
-              Flood Depth (1-in-100y): <strong>{designHazardOverlay.floodDepth100y.toFixed(1)} m</strong>
-            </p>
-            <p>
-              Liquefaction Risk: <strong>{designHazardOverlay.liquefaction}</strong>
-            </p>
-            <p>
-              Wind Exposure: <strong>{coastalCities.has(designCity) ? 'Coastal High' : 'Inland Moderate'}</strong>
-            </p>
-          </div>
-
-          <div className="retrofit-model-output">
-            <h3>🧱 Building Material Suitability Checker</h3>
-            <p>
-              Recommended: <strong>{materialSuitability.recommendations.join(' | ')}</strong>
-            </p>
-            <ul>
-              {materialSuitability.flags.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="retrofit-model-output">
-            <h3>📏 Slope Stability & Retaining Wall Estimator</h3>
-            <div className="inline-controls">
-              <label>
-                Slope Angle (deg)
-                <input type="number" min={5} max={60} value={slopeAngleDeg} onChange={(event) => setSlopeAngleDeg(Number(event.target.value) || 5)} />
               </label>
               <label>
-                Slope Height (m)
-                <input type="number" min={1} max={20} value={slopeHeightM} onChange={(event) => setSlopeHeightM(Number(event.target.value) || 1)} />
-              </label>
-            </div>
-            <p>
-              Stability Class: <strong>{slopeEstimator.stabilityClass}</strong>
-            </p>
-            <p>
-              Recommended Wall: <strong>{slopeEstimator.wallType}</strong>
-            </p>
-            <p>
-              Minimum Embedment: <strong>{slopeEstimator.embedment} m</strong>
-            </p>
-            <p>{slopeEstimator.drainage}</p>
-          </div>
+                City
+                <select value={designCity} onChange={(event) => setDesignCity(event.target.value)}>
+                  {availableDesignCities.map((city) => (
+                    <option key={city}>{city}</option>
+                  ))}
+                </label>
+                <label>
+                  Soil Type
+                  <select value={designSoilType} onChange={(event) => setDesignSoilType(event.target.value as typeof designSoilType)}>
+                    <option>Rocky</option>
+                    <option>Sandy</option>
+                    <option>Clayey</option>
+                    <option>Silty</option>
+                    <option>Saline</option>
+                  </select>
+                </label>
+                <label>
+                  Humidity
+                  <select value={designHumidity} onChange={(event) => setDesignHumidity(event.target.value as typeof designHumidity)}>
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
+                </label>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>💡 Safe Shelter Capacity Planner</h3>
-            <div className="inline-controls">
-              <label>
-                Shelter Area (sqm)
-                <input
-                  type="number"
-                  min={20}
-                  value={shelterAreaSqm}
-                  onChange={(event) => setShelterAreaSqm(Number(event.target.value) || 20)}
-                />
-              </label>
-              <label>
-                Occupancy Type
-                <select
-                  value={shelterOccupancyType}
-                  onChange={(event) => setShelterOccupancyType(event.target.value as typeof shelterOccupancyType)}
-                >
-                  <option>School</option>
-                  <option>Mosque</option>
-                  <option>House</option>
-                </select>
-              </label>
-            </div>
-            <p>
-              Max Safe Capacity: <strong>{shelterCapacityPlan.maxCapacity} people</strong>
-            </p>
-            <ul>
-              {shelterCapacityPlan.layout.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
+              <div className="retrofit-insights-grid">
+                <p>
+                  Seismic Zone: <strong>{designHazardOverlay.seismicZone} / 5</strong>
+                </p>
+                <p>
+                  Flood Depth (1-in-100y): <strong>{designHazardOverlay.floodDepth100y.toFixed(1)} m</strong>
+                </p>
+                <p>
+                  Liquefaction Risk: <strong>{designHazardOverlay.liquefaction}</strong>
+                </p>
+                <p>
+                  Wind Exposure: <strong>{coastalCities.has(designCity) ? 'Coastal High' : 'Inland Moderate'}</strong>
+                </p>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>🔩 Foundation Type Recommender</h3>
-            <p>
-              Recommended Foundation: <strong>{foundationRecommendation.type}</strong>
-            </p>
-            <ul>
-              {foundationRecommendation.risks.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
+              <div className="retrofit-model-output">
+                <h3>🧱 Building Material Suitability Checker</h3>
+                <p>
+                  Recommended: <strong>{materialSuitability.recommendations.join(' | ')}</strong>
+                </p>
+                <ul>
+                  {materialSuitability.flags.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>🚪 Non-Structural Risk Checklist Generator</h3>
-            <ul>
-              {nonStructuralChecklist.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
+              <div className="retrofit-model-output">
+                <h3>📏 Slope Stability & Retaining Wall Estimator</h3>
+                <div className="inline-controls">
+                  <label>
+                    Slope Angle (deg)
+                    <input type="number" min={5} max={60} value={slopeAngleDeg} onChange={(event) => setSlopeAngleDeg(Number(event.target.value) || 5)} />
+                  </label>
+                  <label>
+                    Slope Height (m)
+                    <input type="number" min={1} max={20} value={slopeHeightM} onChange={(event) => setSlopeHeightM(Number(event.target.value) || 1)} />
+                  </label>
+                </div>
+                <p>
+                  Stability Class: <strong>{slopeEstimator.stabilityClass}</strong>
+                </p>
+                <p>
+                  Recommended Wall: <strong>{slopeEstimator.wallType}</strong>
+                </p>
+                <p>
+                  Minimum Embedment: <strong>{slopeEstimator.embedment} m</strong>
+                </p>
+                <p>{slopeEstimator.drainage}</p>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>📐 Wind and Storm Resistance Guide</h3>
-            <p>
-              Roof Angle: <strong>{windStormGuide.roofAngle}</strong>
-            </p>
-            <p>
-              Opening/Vent Guidance: <strong>{windStormGuide.openings}</strong>
-            </p>
-            <p>
-              Tie Beam Details: <strong>{windStormGuide.tieBeams}</strong>
-            </p>
-            <p>{windStormGuide.note}</p>
-          </div>
+              <div className="retrofit-model-output">
+                <h3>💡 Safe Shelter Capacity Planner</h3>
+                <div className="inline-controls">
+                  <label>
+                    Shelter Area (sqm)
+                    <input
+                      type="number"
+                      min={20}
+                      value={shelterAreaSqm}
+                      onChange={(event) => setShelterAreaSqm(Number(event.target.value) || 20)}
+                    />
+                  </label>
+                  <label>
+                    Occupancy Type
+                    <select
+                      value={shelterOccupancyType}
+                      onChange={(event) => setShelterOccupancyType(event.target.value as typeof shelterOccupancyType)}
+                    >
+                      <option>School</option>
+                      <option>Mosque</option>
+                      <option>House</option>
+                    </select>
+                  </label>
+                </div>
+                <p>
+                  Max Safe Capacity: <strong>{shelterCapacityPlan.maxCapacity} people</strong>
+                </p>
+                <ul>
+                  {shelterCapacityPlan.layout.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>📦 Resilient Design Kit Cost Estimator</h3>
-            <div className="inline-controls">
-              <label>
-                House Type
-                <select value={houseTypeForCost} onChange={(event) => setHouseTypeForCost(event.target.value as typeof houseTypeForCost)}>
-                  <option>Single-Storey</option>
-                  <option>Double-Storey</option>
-                  <option>School Block</option>
-                  <option>Clinic Unit</option>
-                </select>
-              </label>
-              <label>
-                Floor Area (sq ft)
-                <input
-                  type="number"
-                  min={300}
-                  value={floorAreaSqftCost}
-                  onChange={(event) => setFloorAreaSqftCost(Number(event.target.value) || 300)}
-                />
-              </label>
-            </div>
-            <div className="retrofit-insights-grid">
-              <p>
-                Unit Cost: <strong>PKR {Math.round(designCostEstimate.unitCost).toLocaleString()}/sq ft</strong>
-              </p>
-              <p>
-                Subtotal: <strong>PKR {Math.round(designCostEstimate.subtotal).toLocaleString()}</strong>
-              </p>
-              <p>
-                Contingency: <strong>PKR {Math.round(designCostEstimate.contingency).toLocaleString()}</strong>
-              </p>
-              <p>
-                Total Estimate: <strong>PKR {Math.round(designCostEstimate.total).toLocaleString()}</strong>
-              </p>
-            </div>
-          </div>
+              <div className="retrofit-model-output">
+                <h3>🔩 Foundation Type Recommender</h3>
+                <p>
+                  Recommended Foundation: <strong>{foundationRecommendation.type}</strong>
+                </p>
+                <ul>
+                  {foundationRecommendation.risks.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
 
-          <div className="retrofit-model-output">
-            <h3>📍 Community Infrastructure Scanner (Beta)</h3>
-            <div className="retrofit-defect-list">
-              {communityScanner.map((item) => (
-                <article key={item.name} className="retrofit-defect-card">
-                  <h4>{item.name}</h4>
+              <div className="retrofit-model-output">
+                <h3>🚪 Non-Structural Risk Checklist Generator</h3>
+                <ul>
+                  {nonStructuralChecklist.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="retrofit-model-output">
+                <h3>📐 Wind and Storm Resistance Guide</h3>
+                <p>
+                  Roof Angle: <strong>{windStormGuide.roofAngle}</strong>
+                </p>
+                <p>
+                  Opening/Vent Guidance: <strong>{windStormGuide.openings}</strong>
+                </p>
+                <p>
+                  Tie Beam Details: <strong>{windStormGuide.tieBeams}</strong>
+                </p>
+                <p>{windStormGuide.note}</p>
+              </div>
+
+              <div className="retrofit-model-output">
+                <h3>📦 Resilient Design Kit Cost Estimator</h3>
+                <div className="inline-controls">
+                  <label>
+                    House Type
+                    <select value={houseTypeForCost} onChange={(event) => setHouseTypeForCost(event.target.value as typeof houseTypeForCost)}>
+                      <option>Single-Storey</option>
+                      <option>Double-Storey</option>
+                      <option>School Block</option>
+                      <option>Clinic Unit</option>
+                    </select>
+                  </label>
+                  <label>
+                    Floor Area (sq ft)
+                    <input
+                      type="number"
+                      min={300}
+                      value={floorAreaSqftCost}
+                      onChange={(event) => setFloorAreaSqftCost(Number(event.target.value) || 300)}
+                    />
+                  </label>
+                </div>
+                <div className="retrofit-insights-grid">
                   <p>
-                    Readiness: <strong>{item.readiness}</strong>
+                    Unit Cost: <strong>PKR {Math.round(designCostEstimate.unitCost).toLocaleString()}/sq ft</strong>
                   </p>
-                  <p>{item.priority}</p>
-                </article>
-              ))}
+                  <p>
+                    Subtotal: <strong>PKR {Math.round(designCostEstimate.subtotal).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Contingency: <strong>PKR {Math.round(designCostEstimate.contingency).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Total Estimate: <strong>PKR {Math.round(designCostEstimate.total).toLocaleString()}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="retrofit-model-output">
+                <h3>📍 Community Infrastructure Scanner (Beta)</h3>
+                <div className="retrofit-defect-list">
+                  {communityScanner.map((item) => (
+                    <article key={item.name} className="retrofit-defect-card">
+                      <h4>{item.name}</h4>
+                      <p>
+                        Readiness: <strong>{item.readiness}</strong>
+                      </p>
+                      <p>{item.priority}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="inline-controls">
+                <button onClick={handleEstimateTotalUpgradeCost}>📦 Estimate My Total Upgrade Cost</button>
+                <button onClick={downloadConstructionDrawings}>🧰 Download Construction Drawings</button>
+                <button onClick={generateFieldImplementationChecklist}>📋 Generate Field Implementation Checklist</button>
+                <button onClick={() => void shareDesignWithCommunity()}>🌍 Share Design with Community</button>
+              </div>
+
+              {designSummaryText && <p>{designSummaryText}</p>}
+
+              {showTrainingPrograms && (
+                <ul>
+                  <li>NESPAK regional training node - structural safety detailing workshops</li>
+                  <li>UNDP resilience accelerator modules - flood and seismic preparedness</li>
+                  <li>ERRA reconstruction practice sessions - field implementation skills</li>
+                  <li>PDMA district drills - emergency shelter and response planning</li>
+                </ul>
+              )}
             </div>
-          </div>
-
-          <div className="inline-controls">
-            <button onClick={handleEstimateTotalUpgradeCost}>📦 Estimate My Total Upgrade Cost</button>
-            <button onClick={downloadConstructionDrawings}>🧰 Download Construction Drawings</button>
-            <button onClick={generateFieldImplementationChecklist}>📋 Generate Field Implementation Checklist</button>
-            <button onClick={() => setShowTrainingPrograms((value) => !value)}>🎓 See Local Training Programs</button>
-            <button onClick={() => void shareDesignWithCommunity()}>🌍 Share Design with Community</button>
-          </div>
-
-          {designSummaryText && <p>{designSummaryText}</p>}
-
-          {showTrainingPrograms && (
-            <ul>
-              <li>NESPAK regional training node - structural safety detailing workshops</li>
-              <li>UNDP resilience accelerator modules - flood and seismic preparedness</li>
-              <li>ERRA reconstruction practice sessions - field implementation skills</li>
-              <li>PDMA district drills - emergency shelter and response planning</li>
-            </ul>
-          )}
-        </div>
-      )
+          )
     }
 
     if (activeSection === 'infraModels') {
@@ -3538,120 +3559,119 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
-                  </select>
-                </label>
-                <label>
-                  City
-                  <select value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
-                    {availableApplyCities.map((city) => (
-                      <option key={city}>{city}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Hazard Focus
-                  <select value={applyHazard} onChange={(event) => setApplyHazard(event.target.value as 'flood' | 'earthquake')}>
-                    <option value="flood">Flood</option>
-                    <option value="earthquake">Earthquake</option>
-                  </select>
-                </label>
-                <label>
-                  Best Practice
-                  <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
-                    {availableApplyBestPractices.map((item) => (
-                      <option key={item.title} value={item.title}>{item.title}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="retrofit-model-output">
-            <h3>📍 Live Location for Auto-Fill</h3>
-            <div className="inline-controls">
-              <button onClick={requestCurrentUserLocation} disabled={isDetectingLocation}>
-                {isDetectingLocation ? '📡 Detecting Live Location...' : '📡 Refresh Live Location'}
-              </button>
-            </div>
-            {locationAccessMsg && <p>{locationAccessMsg}</p>}
-            {detectedUserLocation && (
-              <>
-                <p>
-                  Auto-filled from live location: <strong>{applyCity}, {applyProvince}</strong> | Hazard Focus: <strong>{applyHazard}</strong>
-                </p>
-                <UserLocationMiniMap location={detectedUserLocation} />
-              </>
-            )}
-          </div>
-
-          <button onClick={() => { void generateApplyAreaGuidance() }} disabled={isGeneratingGuidance}>
-            {isGeneratingGuidance ? '⚡ Generating Construction Guidance + Images...' : '🛠️ Construction Guidance'}
-          </button>
-
-          {guidanceError && <p>{guidanceError}</p>}
-
-          {constructionGuidance && (
-            <div className="retrofit-model-output">
-              <h3>Location-Tailored Construction Guidance — {applyBestPracticeTitle}</h3>
-              <div className="context-split-layout context-split-layout-compact">
-                <aside className="context-left-panel">
-                  <h3>Guidance Context</h3>
-                  <p>
-                    <strong>Area:</strong> {applyCity}, {applyProvince}
-                  </p>
-                  <p>
-                    <strong>Hazard:</strong> {applyHazard}
-                  </p>
-                  <p>
-                    <strong>Best Practice:</strong> {applyBestPracticeTitle}
-                  </p>
-                </aside>
-                <div className="context-main-panel">
-                  <p>{constructionGuidance.summary}</p>
+                  </label>
+                  <label>
+                    City
+                    <select value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
+                      {availableApplyCities.map((city) => (
+                        <option key={city}>{city}</option>
+                      ))}
+                    </label>
+                    <label>
+                      Hazard Focus
+                      <select value={applyHazard} onChange={(event) => setApplyHazard(event.target.value as 'flood' | 'earthquake')}>
+                        <option value="flood">Flood</option>
+                        <option value="earthquake">Earthquake</option>
+                      </select>
+                    </label>
+                    <label>
+                      Best Practice
+                      <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
+                        {availableApplyBestPractices.map((item) => (
+                          <option key={item.title} value={item.title}>{item.title}</option>
+                        ))}
+                      </label>
+                  </div>
                 </div>
               </div>
-
-              <h3>Materials</h3>
-              <ul>
-                {constructionGuidance.materials.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-
-              <h3>Safety Checks</h3>
-              <ul>
-                {constructionGuidance.safety.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-
-              <h3>Implementation Steps</h3>
-              <div className="retrofit-defect-list">
-                {constructionGuidance.steps.map((step, index) => {
-                  const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
-                  return (
-                    <article key={`${step.title}-${index}`} className="retrofit-defect-card">
-                      <h4>
-                        Step {index + 1}: {step.title}
-                      </h4>
-                      <p>{step.description}</p>
-                      {image?.imageDataUrl && (
-                        <img src={image.imageDataUrl} alt={`${step.title} visual guide`} className="retrofit-preview" />
-                      )}
-                      <ul>
-                        {step.keyChecks.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </article>
-                  )
-                })}
-              </div>
-              <button onClick={downloadApplyGuidanceReport}>📄 Download Professional Guidance Report (PDF)</button>
-              {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
             </div>
-          )}
+
+            <div className="retrofit-model-output">
+              <h3>📍 Live Location for Auto-Fill</h3>
+              <div className="inline-controls">
+                <button onClick={requestCurrentUserLocation} disabled={isDetectingLocation}>
+                  {isDetectingLocation ? '📡 Detecting Live Location...' : '📡 Refresh Live Location'}
+                </button>
+              </div>
+              {locationAccessMsg && <p>{locationAccessMsg}</p>}
+              {detectedUserLocation && (
+                <>
+                  <p>
+                    Auto-filled from live location: <strong>{applyCity}, {applyProvince}</strong> | Hazard Focus: <strong>{applyHazard}</strong>
+                  </p>
+                  <UserLocationMiniMap location={detectedUserLocation} />
+                </>
+              )}
+            </div>
+
+            <button onClick={() => { void generateApplyAreaGuidance() }} disabled={isGeneratingGuidance}>
+              {isGeneratingGuidance ? '⚡ Generating Construction Guidance + Images...' : '🛠️ Construction Guidance'}
+            </button>
+
+            {guidanceError && <p>{guidanceError}</p>}
+
+            {constructionGuidance && (
+              <div className="retrofit-model-output">
+                <h3>Location-Tailored Construction Guidance — {applyBestPracticeTitle}</h3>
+                <div className="context-split-layout context-split-layout-compact">
+                  <aside className="context-left-panel">
+                    <h3>Guidance Context</h3>
+                    <p>
+                      <strong>Area:</strong> {applyCity}, {applyProvince}
+                    </p>
+                    <p>
+                      <strong>Hazard:</strong> {applyHazard}
+                    </p>
+                    <p>
+                      <strong>Best Practice:</strong> {applyBestPracticeTitle}
+                    </p>
+                  </aside>
+                  <div className="context-main-panel">
+                    <p>{constructionGuidance.summary}</p>
+                  </div>
+                </div>
+
+                <h3>Materials</h3>
+                <ul>
+                  {constructionGuidance.materials.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3>Safety Checks</h3>
+                <ul>
+                  {constructionGuidance.safety.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+
+                <h3>Implementation Steps</h3>
+                <div className="retrofit-defect-list">
+                  {constructionGuidance.steps.map((step, index) => {
+                    const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
+                    return (
+                      <article key={`${step.title}-${index}`} className="retrofit-defect-card">
+                        <h4>
+                          Step {index + 1}: {step.title}
+                        </h4>
+                        <p>{step.description}</p>
+                        {image?.imageDataUrl && (
+                          <img src={image.imageDataUrl} alt={`${step.title} visual guide`} className="retrofit-preview" />
+                        )}
+                        <ul>
+                          {step.keyChecks.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </article>
+                    )
+                  })}
+                </div>
+                <button onClick={downloadApplyGuidanceReport}>📄 Download Professional Guidance Report (PDF)</button>
+                {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
+              </div>
+            )}
+          </div>
         </div>
       )
     }
@@ -3744,254 +3764,252 @@ function App() {
                 {Object.keys(provinceRisk).map((province) => (
                   <option key={province}>{province}</option>
                 ))}
-              </select>
-            </label>
-            <label>
-              City / District (Pakistan)
-              <select
-                value={retrofitCity}
-                onChange={(event) => setRetrofitCity(event.target.value)}
-              >
-                {availableRetrofitCities.map((city) => (
-                  <option key={city}>{city}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label>
-            Upload Clear Building Photo
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) {
-                  void analyzeRetrofitImage(file)
-                }
-              }}
-            />
-          </label>
-
-          {isAnalyzingImage && <p>AI is analyzing structure visibility, defects, corrosion zones, and retrofit cues...</p>}
-          {retrofitError && <p>{retrofitError}</p>}
-
-          {retrofitImagePreview && (
-            <div className="retrofit-preview-wrap">
-              <img src={retrofitImagePreview} alt="Uploaded building" className="retrofit-preview" />
-            </div>
-          )}
-
-          {retrofitImageInsights && (
-            <div className="retrofit-insights-grid">
-              <p>
-                Resolution: <strong>{retrofitImageInsights.width}</strong> x <strong>{retrofitImageInsights.height}</strong>
-              </p>
-              <p>
-                Lighting Index: <strong>{retrofitImageInsights.brightness.toFixed(1)}</strong>
-              </p>
-              <p>
-                Contrast Index: <strong>{retrofitImageInsights.contrast.toFixed(1)}</strong>
-              </p>
-              <p>
-                Sharpness Index: <strong>{retrofitImageInsights.sharpness.toFixed(1)}</strong>
-              </p>
-              <p>
-                AI Visual Quality: <strong>{retrofitImageInsights.quality}</strong>
-              </p>
-            </div>
-          )}
-
-          {visionAnalysis && (
-            <div className="retrofit-model-output">
-              <h3>Model Detection Output</h3>
-              <p>
-                Summary: <strong>{visionAnalysis.summary}</strong>
-              </p>
-              <p>
-                Model: <strong>{visionAnalysis.model}</strong> | Visibility Quality:{' '}
-                <strong>{visionAnalysis.imageQuality.visibility}</strong>
-              </p>
-              <p>{visionAnalysis.imageQuality.notes}</p>
-
-              {visionAnalysis.defects.length > 0 && (
-                <div className="retrofit-defect-list">
-                  {visionAnalysis.defects.map((defect, index) => (
-                    <article key={`${defect.type}-${index}`} className="retrofit-defect-card">
-                      <h4>
-                        {defect.type.toUpperCase()} | Severity: {defect.severity.toUpperCase()} | Confidence:{' '}
-                        {(defect.confidence * 100).toFixed(0)}%
-                      </h4>
-                      <p>
-                        <strong>Location:</strong> {defect.location}
-                      </p>
-                      <p>
-                        <strong>Evidence:</strong> {defect.evidence}
-                      </p>
-                      <p>
-                        <strong>Retrofit Action:</strong> {defect.retrofitAction}
-                      </p>
-                    </article>
+              </label>
+              <label>
+                City / District (Pakistan)
+                <select
+                  value={retrofitCity}
+                  onChange={(event) => setRetrofitCity(event.target.value)}
+                >
+                  {availableRetrofitCities.map((city) => (
+                    <option key={city}>{city}</option>
                   ))}
+                </label>
+              </div>
+              <label>
+                Upload Clear Building Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) {
+                      void analyzeRetrofitImage(file)
+                    }
+                  }}
+                />
+              </label>
+
+              {isAnalyzingImage && <p>AI is analyzing structure visibility, defects, corrosion zones, and retrofit cues...</p>}
+              {retrofitError && <p>{retrofitError}</p>}
+
+              {retrofitImagePreview && (
+                <div className="retrofit-preview-wrap">
+                  <img src={retrofitImagePreview} alt="Uploaded building" className="retrofit-preview" />
                 </div>
               )}
 
-              <p>
-                <strong>Safety Note:</strong> {visionAnalysis.safetyNote}
-              </p>
-            </div>
-          )}
+              {retrofitImageInsights && (
+                <div className="retrofit-insights-grid">
+                  <p>
+                    Resolution: <strong>{retrofitImageInsights.width}</strong> x <strong>{retrofitImageInsights.height}</strong>
+                  </p>
+                  <p>
+                    Lighting Index: <strong>{retrofitImageInsights.brightness.toFixed(1)}</strong>
+                  </p>
+                  <p>
+                    Contrast Index: <strong>{retrofitImageInsights.contrast.toFixed(1)}</strong>
+                  </p>
+                  <p>
+                    Sharpness Index: <strong>{retrofitImageInsights.sharpness.toFixed(1)}</strong>
+                  </p>
+                  <p>
+                    AI Visual Quality: <strong>{retrofitImageInsights.quality}</strong>
+                  </p>
+                </div>
+              )}
 
-          {retrofitAiGuidelines.length > 0 && (
-            <div className="retrofit-ai-guidance">
-              <h3>AI Retrofit Guidance</h3>
-              <ul>
-                {retrofitAiGuidelines.map((advice) => (
-                  <li key={advice}>{advice}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+              {visionAnalysis && (
+                <div className="retrofit-model-output">
+                  <h3>Model Detection Output</h3>
+                  <p>
+                    Summary: <strong>{visionAnalysis.summary}</strong>
+                  </p>
+                  <p>
+                    Model: <strong>{visionAnalysis.model}</strong> | Visibility Quality:{' '}
+                    <strong>{visionAnalysis.imageQuality.visibility}</strong>
+                  </p>
+                  <p>{visionAnalysis.imageQuality.notes}</p>
 
-          <div className="retrofit-model-output">
-            <h3>Retrofit Calculator</h3>
-            <p>
-              Estimate Source: <strong>{retrofitEstimate.estimateSource}</strong>
-              {retrofitEstimate.estimateSource === 'Image-driven' && ' (based on uploaded image defect analysis)'}
-              {retrofitEstimate.estimateSource === 'ML Model' && ' (kNN model calibrated for Pakistan retrofit cases)'}
-            </p>
-            {retrofitEstimate.mlModel && (
-              <p>
-                ML Model: <strong>{retrofitEstimate.mlModel}</strong>
-                {typeof retrofitEstimate.mlConfidence === 'number' && (
-                  <>
-                    {' '}
-                    | Confidence: <strong>{(retrofitEstimate.mlConfidence * 100).toFixed(0)}%</strong>
-                  </>
+                  {visionAnalysis.defects.length > 0 && (
+                    <div className="retrofit-defect-list">
+                      {visionAnalysis.defects.map((defect, index) => (
+                        <article key={`${defect.type}-${index}`} className="retrofit-defect-card">
+                          <h4>
+                            {defect.type.toUpperCase()} | Severity: {defect.severity.toUpperCase()} | Confidence:{' '}
+                            {(defect.confidence * 100).toFixed(0)}%
+                          </h4>
+                          <p>
+                            <strong>Location:</strong> {defect.location}
+                          </p>
+                          <p>
+                            <strong>Evidence:</strong> {defect.evidence}
+                          </p>
+                          <p>
+                            <strong>Retrofit Action:</strong> {defect.retrofitAction}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+
+                  <p>
+                    <strong>Safety Note:</strong> {visionAnalysis.safetyNote}
+                  </p>
+                </div>
+              )}
+
+              {retrofitAiGuidelines.length > 0 && (
+                <div className="retrofit-ai-guidance">
+                  <h3>AI Retrofit Guidance</h3>
+                  <ul>
+                    {retrofitAiGuidelines.map((advice) => (
+                      <li key={advice}>{advice}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="retrofit-model-output">
+                <h3>Retrofit Calculator</h3>
+                <p>
+                  Estimate Source: <strong>{retrofitEstimate.estimateSource}</strong>
+                  {retrofitEstimate.estimateSource === 'Image-driven' && ' (based on uploaded image defect analysis)'}
+                  {retrofitEstimate.estimateSource === 'ML Model' && ' (kNN model calibrated for Pakistan retrofit cases)'}
+                </p>
+                {retrofitEstimate.mlModel && (
+                  <p>
+                    ML Model: <strong>{retrofitEstimate.mlModel}</strong>
+                    {typeof retrofitEstimate.mlConfidence === 'number' && (
+                      <>
+                        {' '}
+                        | Confidence: <strong>{(retrofitEstimate.mlConfidence * 100).toFixed(0)}%</strong>
+                      </>
+                    )}
+                  </p>
                 )}
-              </p>
-            )}
-            <div className="inline-controls">
-              <label>
-                Retrofit Scope
-                <select
-                  value={retrofitEstimate.effectiveScope}
-                  disabled={retrofitEstimate.estimateSource !== 'Manual'}
-                  onChange={(event) => setRetrofitScope(event.target.value as 'Basic' | 'Standard' | 'Comprehensive')}
-                >
-                  <option>Basic</option>
-                  <option>Standard</option>
-                  <option>Comprehensive</option>
-                </select>
-              </label>
-              <label>
-                Defect Severity
-                <select
-                  value={retrofitEstimate.effectiveDamageLevel}
-                  disabled={retrofitEstimate.estimateSource !== 'Manual'}
-                  onChange={(event) => setRetrofitDamageLevel(event.target.value as 'Low' | 'Medium' | 'High')}
-                >
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-              </label>
-            </div>
+                <div className="inline-controls">
+                  <label>
+                    Retrofit Scope
+                    <select
+                      value={retrofitEstimate.effectiveScope}
+                      disabled={retrofitEstimate.estimateSource !== 'Manual'}
+                      onChange={(event) => setRetrofitScope(event.target.value as 'Basic' | 'Standard' | 'Comprehensive')}
+                    >
+                      <option>Basic</option>
+                      <option>Standard</option>
+                      <option>Comprehensive</option>
+                    </select>
+                  </label>
+                  <label>
+                    Defect Severity
+                    <select
+                      value={retrofitEstimate.effectiveDamageLevel}
+                      disabled={retrofitEstimate.estimateSource !== 'Manual'}
+                      onChange={(event) => setRetrofitDamageLevel(event.target.value as 'Low' | 'Medium' | 'High')}
+                    >
+                      <option>Low</option>
+                      <option>Medium</option>
+                      <option>High</option>
+                    </select>
+                  </label>
+                </div>
 
-            <div className="retrofit-insights-grid">
-              <p>
-                Area Considered: <strong>{retrofitEstimate.area.toLocaleString()} sq ft</strong>
-              </p>
-              <p>
-                Base Cost: <strong>PKR {Math.round(retrofitEstimate.baseCost).toLocaleString()}</strong>
-              </p>
-              <p>
-                Hazard Adjusted: <strong>PKR {Math.round(retrofitEstimate.adjustedCost).toLocaleString()}</strong>
-              </p>
-              <p>
-                Contingency (12%): <strong>PKR {Math.round(retrofitEstimate.contingency).toLocaleString()}</strong>
-              </p>
-              <p>
-                Estimated Total: <strong>PKR {Math.round(retrofitEstimate.totalCost).toLocaleString()}</strong>
-              </p>
-              <p>
-                Image-Based Range:{' '}
-                <strong>
-                  PKR {Math.round(retrofitEstimate.minTotalCost).toLocaleString()} - PKR{' '}
-                  {Math.round(retrofitEstimate.maxTotalCost).toLocaleString()}
-                </strong>
-              </p>
-              <p>
-                Effective Rate: <strong>PKR {Math.round(retrofitEstimate.sqftRate).toLocaleString()}/sq ft</strong>
-              </p>
-              <p>
-                Location Cost Factor: <strong>{retrofitEstimate.locationFactor.toFixed(2)}x</strong>
-              </p>
-              <p>
-                Labor Rate (daily): <strong>PKR {Math.round(retrofitEstimate.laborDaily).toLocaleString()}</strong>
-              </p>
-              <p>
-                Material Index: <strong>{retrofitEstimate.materialIndex.toFixed(2)}</strong>
-              </p>
-              <p>
-                Logistics Index: <strong>{retrofitEstimate.logisticsIndex.toFixed(2)}</strong>
-              </p>
-              <p>
-                Estimated Duration: <strong>{retrofitEstimate.durationWeeks} weeks</strong>
-              </p>
-              {retrofitEstimate.affectedAreaPercent && (
-                <p>
-                  Affected Area (detected): <strong>{Math.round(retrofitEstimate.affectedAreaPercent)}%</strong>
-                </p>
-              )}
-              {retrofitEstimate.urgencyLevel && (
-                <p>
-                  Urgency Level (detected): <strong>{retrofitEstimate.urgencyLevel}</strong>
-                </p>
-              )}
-            </div>
-            {retrofitEstimate.mlGuidance.length > 0 && (
-              <ul>
-                {retrofitEstimate.mlGuidance.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
-            {mlEstimate?.guidanceDetailed && mlEstimate.guidanceDetailed.length > 0 && (
-              <div className="retrofit-defect-list">
-                {mlEstimate.guidanceDetailed.map((item) => (
-                  <article key={`${item.priority}-${item.action}`} className="retrofit-defect-card">
-                    <h4>
-                      {item.priority} | {item.action}
-                    </h4>
+                <div className="retrofit-insights-grid">
+                  <p>
+                    Area Considered: <strong>{retrofitEstimate.area.toLocaleString()} sq ft</strong>
+                  </p>
+                  <p>
+                    Base Cost: <strong>PKR {Math.round(retrofitEstimate.baseCost).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Hazard Adjusted: <strong>PKR {Math.round(retrofitEstimate.adjustedCost).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Contingency (12%): <strong>PKR {Math.round(retrofitEstimate.contingency).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Estimated Total: <strong>PKR {Math.round(retrofitEstimate.totalCost).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Image-Based Range:{' '}
+                    <strong>
+                      PKR {Math.round(retrofitEstimate.minTotalCost).toLocaleString()} - PKR{' '}
+                      {Math.round(retrofitEstimate.maxTotalCost).toLocaleString()}
+                    </strong>
+                  </p>
+                  <p>
+                    Effective Rate: <strong>PKR {Math.round(retrofitEstimate.sqftRate).toLocaleString()}/sq ft</strong>
+                  </p>
+                  <p>
+                    Location Cost Factor: <strong>{retrofitEstimate.locationFactor.toFixed(2)}x</strong>
+                  </p>
+                  <p>
+                    Labor Rate (daily): <strong>PKR {Math.round(retrofitEstimate.laborDaily).toLocaleString()}</strong>
+                  </p>
+                  <p>
+                    Material Index: <strong>{retrofitEstimate.materialIndex.toFixed(2)}</strong>
+                  </p>
+                  <p>
+                    Logistics Index: <strong>{retrofitEstimate.logisticsIndex.toFixed(2)}</strong>
+                  </p>
+                  <p>
+                    Estimated Duration: <strong>{retrofitEstimate.durationWeeks} weeks</strong>
+                  </p>
+                  {retrofitEstimate.affectedAreaPercent && (
                     <p>
-                      <strong>Rationale:</strong> {item.rationale}
+                      Affected Area (detected): <strong>{Math.round(retrofitEstimate.affectedAreaPercent)}%</strong>
                     </p>
+                  )}
+                  {retrofitEstimate.urgencyLevel && (
                     <p>
-                      <strong>Expected Impact:</strong> {item.estimatedImpact}
+                      Urgency Level (detected): <strong>{retrofitEstimate.urgencyLevel}</strong>
                     </p>
-                  </article>
-                ))}
+                  )}
+                </div>
+                {retrofitEstimate.mlGuidance.length > 0 && (
+                  <ul>
+                    {retrofitEstimate.mlGuidance.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+                {mlEstimate?.guidanceDetailed && mlEstimate.guidanceDetailed.length > 0 && (
+                  <div className="retrofit-defect-list">
+                    {mlEstimate.guidanceDetailed.map((item) => (
+                      <article key={`${item.priority}-${item.action}`} className="retrofit-defect-card">
+                        <h4>
+                          {item.priority} | {item.action}
+                        </h4>
+                        <p>
+                          <strong>Rationale:</strong> {item.rationale}
+                        </p>
+                        <p>
+                          <strong>Expected Impact:</strong> {item.estimatedImpact}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                {mlEstimate?.assumptions && mlEstimate.assumptions.length > 0 && (
+                  <ul>
+                    {mlEstimate.assumptions.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={downloadRetrofitEstimate}>📥 Download Retrofit Estimate PDF</button>
               </div>
-            )}
-            {mlEstimate?.assumptions && mlEstimate.assumptions.length > 0 && (
-              <ul>
-                {mlEstimate.assumptions.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
-            <button onClick={downloadRetrofitEstimate}>📥 Download Retrofit Estimate PDF</button>
-          </div>
 
-          <ol>
-            <li>Inspect and document structural defects.</li>
-            <li>Select retrofit method: {toolkit.retrofittingTechnique}.</li>
-            <li>Estimate cost: PKR 250/sqft to PKR 1350/sqft.</li>
-            <li>Material list: rebar, epoxy grout, steel mesh, concrete micro-fiber.</li>
-            <li>Example images: before/after placeholders shown in field implementation docs.</li>
-          </ol>
-        </div>
-      )
+              <ol>
+                <li>Inspect and document structural defects.</li>
+                <li>Select retrofit method: {toolkit.retrofittingTechnique}.</li>
+                <li>Estimate cost: PKR 250/sqft to PKR 1350/sqft.</li>
+                <li>Material list: rebar, epoxy grout, steel mesh, concrete micro-fiber.</li>
+                <li>Example images: before/after placeholders shown in field implementation docs.</li>
+              </ol>
+            </div>
+          )
     }
 
     if (activeSection === 'warning') {
