@@ -1,3 +1,17 @@
+// ...existing code...
+useEffect(() => {
+  if (
+    constructionGuidance &&
+    guidanceStepImages &&
+    guidanceStepImages.length === constructionGuidance.steps.length &&
+    guidanceStepImages.every(img => img?.imageDataUrl)
+  ) {
+    setIsReportReady(true);
+  } else {
+    setIsReportReady(false);
+  }
+}, [constructionGuidance, guidanceStepImages]);
+// ...existing code...
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import RiskMap from './components/RiskMap'
