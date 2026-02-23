@@ -4035,13 +4035,6 @@ function App() {
                 <button onClick={downloadRetrofitEstimate}>📥 Download Retrofit Estimate PDF</button>
               </div>
 
-              <ol>
-                <li>Inspect and document structural defects.</li>
-                <li>Select retrofit method: {toolkit.retrofittingTechnique}.</li>
-                <li>Estimate cost: PKR 250/sqft to PKR 1350/sqft.</li>
-                <li>Material list: rebar, epoxy grout, steel mesh, concrete micro-fiber.</li>
-                <li>Example images: before/after placeholders shown in field implementation docs.</li>
-              </ol>
             </div>
           )
     }
