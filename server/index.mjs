@@ -298,6 +298,58 @@ app.post('/api/guidance/step-images', async (req, res) => {
   }
 })
 
+app.post('/api/advisory/ask', async (req, res) => {
+  if (!openai) {
+    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for AI advisory answers.' })
+    return
+  }
+
+  try {
+    const question = String(req.body.question ?? '').trim()
+    const province = String(req.body.province ?? 'Punjab')
+    const district = req.body.district ? String(req.body.district) : null
+    const riskLayer = String(req.body.riskLayer ?? 'flood')
+    const riskValue = String(req.body.riskValue ?? 'Unknown')
+    const language = String(req.body.language ?? 'English')
+    const districtProfile = req.body.districtProfile ?? null
+
+    if (!question) {
+      res.status(400).json({ error: 'Question is required.' })
+      return
+    }
+
+    const responseLanguage = language === 'Urdu' ? 'Urdu' : 'English'
+
+    const completion = await openai.chat.completions.create({
+      model,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are Resilience360 AI advisor. Answer questions on hazards, climate change, environmental resilience, and relevant organizations with practical, accurate, and actionable guidance for Pakistan. Keep answers concise but useful, and avoid hallucinated specific numbers or claims.',
+        },
+        {
+          role: 'user',
+          content:
+            `Answer this user question in ${responseLanguage}: "${question}"\n\nLocal context:\n- Province: ${province}\n- District: ${district ?? 'Not selected'}\n- Risk layer: ${riskLayer}\n- Risk value: ${riskValue}\n- District profile JSON: ${JSON.stringify(districtProfile)}\n\nResponse requirements:\n1) Provide a practical answer tailored to the local context where relevant.\n2) Mention 2-4 concrete next actions.\n3) If applicable, mention credible organizations to coordinate with (e.g., NDMA, PDMA, PMD, district administration, humanitarian agencies).\n4) Keep response within about 180 words.`,
+        },
+      ],
+    })
+
+    const answer = completion.choices[0]?.message?.content?.trim() ?? ''
+    if (!answer) {
+      res.status(500).json({ error: 'AI returned an empty advisory response.' })
+      return
+    }
+
+    res.json({ answer })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Advisory generation failed.'
+    res.status(500).json({ error: message })
+  }
+})
+
 app.post('/api/models/resilience-catalog', async (req, res) => {
   if (!openai) {
     res.status(503).json({

@@ -30,6 +30,7 @@ import {
   type InfraResearchResult,
   type StructuralDesignReport,
 } from './services/infraResearch'
+import { askLocalAdvisory } from './services/advisory'
 import {
   districtRiskLookupByName,
   findDistrictRiskProfile,
@@ -837,6 +838,8 @@ function App() {
   const [riskActionProgress, setRiskActionProgress] = useState(0)
   const [advisoryQuestion, setAdvisoryQuestion] = useState('')
   const [advisoryMessages, setAdvisoryMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
+  const [isAskingAdvisory, setIsAskingAdvisory] = useState(false)
+  const [advisoryError, setAdvisoryError] = useState<string | null>(null)
   const [activeDrawingId, setActiveDrawingId] = useState<string | null>(null)
   const [communityLocationSuggestion, setCommunityLocationSuggestion] = useState('')
   const [structureReviewType, setStructureReviewType] = useState<'Home' | 'School' | 'Clinic' | 'Bridge'>('Home')
@@ -2277,12 +2280,68 @@ function App() {
       : `${profile.district} infrastructure risk is ${profile.infraRisk}. Dominant vulnerability: ${profile.dominantStructure}. Recommended actions: ${profile.resilienceActions.join(' | ')}`
   }
 
-  const sendLocalAdvisoryQuestion = () => {
+  const sendLocalAdvisoryQuestion = async () => {
     const question = advisoryQuestion.trim()
     if (!question) return
-    const response = answerLocalAdvisory(question)
-    setAdvisoryMessages((messages) => [...messages, { role: 'user', text: question }, { role: 'assistant', text: response }])
+
+    setAdvisoryError(null)
+    setIsAskingAdvisory(true)
+    setAdvisoryMessages((messages) => [...messages, { role: 'user', text: question }])
     setAdvisoryQuestion('')
+
+    try {
+      const result = await askLocalAdvisory({
+        question,
+        province: selectedProvince,
+        district: selectedDistrict,
+        riskLayer: mapLayer,
+        riskValue,
+        language: districtUiLanguage,
+        districtProfile: selectedDistrictProfile,
+      })
+
+      setAdvisoryMessages((messages) => [...messages, { role: 'assistant', text: result.answer }])
+    } catch (error) {
+      const fallback = answerLocalAdvisory(question)
+      setAdvisoryMessages((messages) => [...messages, { role: 'assistant', text: fallback }])
+      setAdvisoryError(error instanceof Error ? error.message : 'AI advisory temporarily unavailable. Showing local fallback answer.')
+    } finally {
+      setIsAskingAdvisory(false)
+    }
+  }
+
+  const downloadLatestAdvisoryAnswerPdf = () => {
+    const latestAssistant = [...advisoryMessages].reverse().find((message) => message.role === 'assistant')
+    const latestQuestion = [...advisoryMessages].reverse().find((message) => message.role === 'user')
+    if (!latestAssistant) return
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const margin = 12
+    const width = doc.internal.pageSize.getWidth() - margin * 2
+    let cursorY = 18
+
+    doc.setFontSize(14)
+    doc.text('Resilience360 - Advisory Answer Snapshot', margin, cursorY)
+    cursorY += 8
+
+    doc.setFontSize(10)
+    doc.text(`Province: ${selectedProvince} | District: ${selectedDistrict ?? 'Not selected'} | Layer: ${mapLayer} (${riskValue})`, margin, cursorY)
+    cursorY += 7
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, cursorY)
+    cursorY += 8
+
+    if (latestQuestion) {
+      const questionLines = doc.splitTextToSize(`Question: ${latestQuestion.text}`, width)
+      doc.setFont('helvetica', 'bold')
+      doc.text(questionLines, margin, cursorY)
+      cursorY += questionLines.length * 5 + 3
+      doc.setFont('helvetica', 'normal')
+    }
+
+    const answerLines = doc.splitTextToSize(`Answer: ${latestAssistant.text}`, width)
+    doc.text(answerLines, margin, cursorY)
+
+    doc.save(`resilience360-advisory-answer-${selectedProvince}-${selectedDistrict ?? 'district'}-${Date.now()}.pdf`)
   }
 
   const saveDistrictProfileLocally = () => {
@@ -2809,8 +2868,11 @@ function App() {
                 onChange={(event) => setAdvisoryQuestion(event.target.value)}
                 placeholder="e.g., What should schools in this district do before monsoon?"
               />
-              <button onClick={sendLocalAdvisoryQuestion}>💬 Ask</button>
+              <button onClick={() => { void sendLocalAdvisoryQuestion() }} disabled={isAskingAdvisory}>
+                {isAskingAdvisory ? '💬 Thinking...' : '💬 Ask'}
+              </button>
             </div>
+            {advisoryError && <p>{advisoryError}</p>}
             {advisoryMessages.length > 0 && (
               <div>
                 {advisoryMessages.slice(-6).map((message, idx) => (
@@ -2818,6 +2880,7 @@ function App() {
                     <strong>{message.role === 'user' ? 'You' : 'Advisor'}:</strong> {message.text}
                   </p>
                 ))}
+                <button onClick={downloadLatestAdvisoryAnswerPdf}>📄 Download Latest Answer (PDF)</button>
               </div>
             )}
           </div>
