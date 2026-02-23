@@ -46,6 +46,7 @@ type SectionKey =
   | 'riskMaps'
   | 'designToolkit'
   | 'infraModels'
+  | 'coePortal'
   | 'pgbc'
   | 'applyRegion'
   | 'readiness'
@@ -202,6 +203,7 @@ const translations = {
       riskMaps: '🗺️ Risk Zone Maps',
       designToolkit: '🏗️ Design Toolkit',
       infraModels: '🧱 Resilience Infra Models',
+      coePortal: '🎓 COE Training Portal',
       pgbc: '🏛️ PGBC Portal',
       applyRegion: '📍 Construct in my Region',
       readiness: '📊 Readiness Calculator',
@@ -224,6 +226,7 @@ const translations = {
       riskMaps: '🗺️ رسک زون میپس',
       designToolkit: '🏗️ ڈیزائن ٹول کٹ',
       infraModels: '🧱 ریزیلینس انفرا ماڈلز',
+      coePortal: '🎓 سی او ای ٹریننگ پورٹل',
       pgbc: '🏛️ پی جی بی سی پورٹل',
       applyRegion: '📍 اپنے علاقے میں تعمیر',
       readiness: '📊 تیاری کیلکولیٹر',
@@ -423,6 +426,12 @@ const homeCardMeta: Record<
     title: 'Resilience Infra Models',
     subtitle: 'AI Visual Catalog',
     tone: 'tone-d',
+  },
+  coePortal: {
+    icon: '🎓',
+    title: 'COE Training Portal',
+    subtitle: 'Enroll in COE Lectures',
+    tone: 'tone-h',
   },
   pgbc: {
     icon: '🏛️',
@@ -4643,7 +4652,7 @@ function App() {
           <div className="inline-controls">
             <button
               type="button"
-              onClick={() => window.open(`${import.meta.env.BASE_URL}coe-portal/index.html`, '_blank', 'noopener,noreferrer')}
+              onClick={() => navigateToSection('coePortal')}
             >
               🎓 Enroll in COE lectures
             </button>
@@ -4702,6 +4711,26 @@ function App() {
             title="PGBC Portal"
             className="pgbc-portal-frame"
             src={`${import.meta.env.BASE_URL}pgbc/index.html`}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )
+    }
+
+    if (activeSection === 'coePortal') {
+      return (
+        <div className="panel section-panel section-pgbc">
+          <h2>{t.sections.coePortal}</h2>
+          <div className="inline-controls">
+            <a href={`${import.meta.env.BASE_URL}coe-portal/`} target="_blank" rel="noreferrer">
+              Open COE in new tab
+            </a>
+          </div>
+          <iframe
+            title="COE Training Portal"
+            className="pgbc-portal-frame"
+            src={`${import.meta.env.BASE_URL}coe-portal/`}
             loading="lazy"
             referrerPolicy="no-referrer"
           />
