@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 export function Auth() {
   const navigate = useNavigate();
-  const { login, signup, recoverTraineeAccess } = useAuth();
+  const { login, signup, sendTraineeCredentialsEmail } = useAuth();
 
   // Admin login state
   const [adminEmail, setAdminEmail] = useState("");
@@ -32,7 +32,6 @@ export function Auth() {
   const [traineeLoginCnic, setTraineeLoginCnic] = useState("");
   const [showRecoveryForm, setShowRecoveryForm] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState("");
-  const [recoveryCnic, setRecoveryCnic] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -132,25 +131,27 @@ export function Auth() {
     const nextErrors: Record<string, string> = {};
     if (!recoveryEmail.trim()) nextErrors.recoveryEmail = "Email is required";
     if (recoveryEmail && !/\S+@\S+\.\S+/.test(recoveryEmail)) nextErrors.recoveryEmail = "Invalid email format";
-    if (!recoveryCnic.trim()) nextErrors.recoveryCnic = "CNIC is required";
-    if (recoveryCnic && !/^\d{13}$/.test(recoveryCnic.replace(/-/g, ""))) {
-      nextErrors.recoveryCnic = "CNIC must be 13 digits (e.g., 12345-1234567-1)";
-    }
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors((prev) => ({ ...prev, ...nextErrors }));
       return;
     }
 
-    const success = await recoverTraineeAccess(recoveryEmail.trim(), recoveryCnic.trim());
+    const result = await sendTraineeCredentialsEmail(recoveryEmail.trim());
 
-    if (success) {
-      toast.success("Account recovered successfully. You are now signed in.");
-      navigate("/");
+    if (result.ok) {
+      toast.success("Credentials sent to your registered email.");
+      setShowRecoveryForm(false);
       return;
     }
 
-    toast.error("Recovery failed. Please check your registered email and CNIC.");
+    if (result.reason === "missing-config") {
+      toast.error("Recovery email service is not configured.");
+      setErrors((prev) => ({ ...prev, recoveryEmail: "Recovery email service not configured" }));
+      return;
+    }
+
+    toast.error("Recovery failed. Please check your registered email.");
     setErrors((prev) => ({ ...prev, recoveryEmail: "Recovery failed" }));
   };
 
@@ -383,7 +384,7 @@ export function Auth() {
                   {showRecoveryForm && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
                       <p className="text-xs text-amber-900">
-                        Recover your account with your registered email and CNIC. This works across all devices.
+                        Enter your registered email. We will send all login credentials automatically.
                       </p>
                       <div className="space-y-3">
                         <div className="space-y-2">
@@ -401,26 +402,12 @@ export function Auth() {
                           {errors.recoveryEmail && <p className="text-xs text-red-600">{errors.recoveryEmail}</p>}
                         </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="recovery-cnic">CNIC</Label>
-                          <Input
-                            id="recovery-cnic"
-                            placeholder="12345-1234567-1"
-                            value={recoveryCnic}
-                            onChange={(e) => {
-                              setRecoveryCnic(e.target.value);
-                              setErrors((prev) => ({ ...prev, recoveryCnic: "" }));
-                            }}
-                          />
-                          {errors.recoveryCnic && <p className="text-xs text-red-600">{errors.recoveryCnic}</p>}
-                        </div>
-
                         <Button
                           type="button"
                           className="w-full bg-amber-600 hover:bg-amber-700"
                           onClick={handleRecoverAccess}
                         >
-                          Recover Account
+                          Send Credentials
                         </Button>
                       </div>
                     </div>

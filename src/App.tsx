@@ -380,7 +380,7 @@ const getHazardOverlay = (province: string, city: string) => {
 }
 
 const roleOptions = ['General Public', 'Engineer / Planner', 'Government Officer'] as const
-const BUILD_VERSION_LABEL = 'fbe32c0'
+const BUILD_VERSION_LABEL = String(import.meta.env.VITE_BUILD_VERSION ?? 'local').slice(0, 7)
 
 const homeSectionKeys: SectionKey[] = [
   'bestPractices',

@@ -26,7 +26,7 @@ type User = Trainee | Admin;
 interface AuthContextType {
   user: User | null;
   login: (email: string, password?: string) => Promise<boolean>;
-  recoverTraineeAccess: (email: string, cnic: string) => Promise<boolean>;
+  sendTraineeCredentialsEmail: (email: string) => Promise<{ ok: boolean; reason?: string }>;
   signup: (data: Omit<Trainee, "id" | "role" | "enrolledCourses" | "courseProgress" | "completedModules">) => Promise<boolean>;
   updateProfile: (data: {
     name: string;
@@ -60,6 +60,13 @@ const SUPABASE_HEADERS: HeadersInit = {
   apikey: SUPABASE_ANON_KEY,
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
   "Content-Type": "application/json",
+};
+
+const DEFAULT_RECOVERY_EMAILJS_CONFIG = {
+  serviceId: "service_0kiqxra",
+  templateId: "template_4uniopo",
+  publicKey: "25iaOSGu9AvtiAydP",
+  fromName: "NDMA COE Training Portal",
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -205,39 +212,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const recoverTraineeAccess = async (email: string, cnic: string): Promise<boolean> => {
-    const normalizedProvidedCnic = String(cnic ?? "").replace(/-/g, "").trim();
-    if (!email || !normalizedProvidedCnic) {
-      return false;
+  const getRecoveryEmailConfig = () => {
+    const serviceId = String(localStorage.getItem("recovery_emailjs_service_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.serviceId).trim();
+    const templateId = String(localStorage.getItem("recovery_emailjs_template_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.templateId).trim();
+    const publicKey = String(localStorage.getItem("recovery_emailjs_public_key") || DEFAULT_RECOVERY_EMAILJS_CONFIG.publicKey).trim();
+    const fromName = String(localStorage.getItem("recovery_from_name") || DEFAULT_RECOVERY_EMAILJS_CONFIG.fromName).trim();
+
+    return { serviceId, templateId, publicKey, fromName };
+  };
+
+  const sendRecoveryEmail = async (trainee: Trainee): Promise<{ ok: boolean; reason?: string }> => {
+    const config = getRecoveryEmailConfig();
+    if (!config.serviceId || !config.templateId || !config.publicKey) {
+      return { ok: false, reason: "missing-config" };
+    }
+
+    const payload = {
+      service_id: config.serviceId,
+      template_id: config.templateId,
+      user_id: config.publicKey,
+      template_params: {
+        to_email: trainee.email,
+        email: trainee.email,
+        user_email: trainee.email,
+        to_name: trainee.name,
+        role: trainee.role,
+        username: trainee.email,
+        password: trainee.cnic,
+        cnic: trainee.cnic,
+        from_name: config.fromName,
+        from: config.fromName,
+        portal_name: "NDMA COE Training Portal",
+        message: `Email: ${trainee.email} | CNIC: ${trainee.cnic}`,
+      },
+    };
+
+    try {
+      const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        return { ok: false, reason: `api-failed:${response.status}` };
+      }
+
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: "network-error" };
+    }
+  };
+
+  const sendTraineeCredentialsEmail = async (email: string): Promise<{ ok: boolean; reason?: string }> => {
+    const normalizedEmail = String(email ?? "").trim();
+    if (!normalizedEmail) {
+      return { ok: false, reason: "missing-email" };
     }
 
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=eq.${encodeURIComponent(email)}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
         {
           headers: SUPABASE_HEADERS,
         },
       );
 
       if (!response.ok) {
-        return false;
+        return { ok: false, reason: "lookup-failed" };
       }
 
       const rows = await response.json();
       if (!Array.isArray(rows) || rows.length === 0) {
-        return false;
-      }
-
-      const normalizedStoredCnic = String(rows[0]?.cnic ?? "").replace(/-/g, "").trim();
-      if (!normalizedStoredCnic || normalizedProvidedCnic !== normalizedStoredCnic) {
-        return false;
+        return { ok: false, reason: "not-found" };
       }
 
       const trainee = mapTraineeFromDb(rows[0]);
-      persistSessionUser(trainee);
-      return true;
+      return sendRecoveryEmail(trainee);
     } catch {
-      return false;
+      return { ok: false, reason: "network-error" };
     }
   };
 
@@ -395,7 +450,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         login,
-        recoverTraineeAccess,
+        sendTraineeCredentialsEmail,
         signup,
         updateProfile,
         logout,

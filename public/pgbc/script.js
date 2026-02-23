@@ -2,6 +2,13 @@ let currentUser = null;
 let codes = JSON.parse(localStorage.getItem("codes")) || [];
 let deletedPredefinedCodes = JSON.parse(localStorage.getItem("deletedPredefinedCodes")) || [];
 
+const DEFAULT_RECOVERY_EMAILJS_CONFIG = {
+    serviceId: 'service_0kiqxra',
+    templateId: 'template_4uniopo',
+    publicKey: '25iaOSGu9AvtiAydP',
+    fromName: 'Pakistan Green Building Codes Portal'
+};
+
 const SUPABASE_URL = 'https://glbhizmhrwqomcrxsflb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsYmhpem1ocndxb21jcnhzZmxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0MzI1ODQsImV4cCI6MjA4NzAwODU4NH0.ZyswE5tt3lFaXgfKDABI25q8u3RNBKGKWJBAilQqvvY';
 
@@ -25,6 +32,77 @@ function getSupabaseClient() {
         supabaseClientInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
     return supabaseClientInstance;
+}
+
+function getRecoveryEmailConfig() {
+    const serviceId = (localStorage.getItem("recovery_emailjs_service_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.serviceId).trim();
+    const templateId = (localStorage.getItem("recovery_emailjs_template_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.templateId).trim();
+    const publicKey = (localStorage.getItem("recovery_emailjs_public_key") || DEFAULT_RECOVERY_EMAILJS_CONFIG.publicKey).trim();
+    const fromName = (localStorage.getItem("recovery_from_name") || DEFAULT_RECOVERY_EMAILJS_CONFIG.fromName).trim();
+
+    return {
+        serviceId,
+        templateId,
+        publicKey,
+        fromName
+    };
+}
+
+function getMissingRecoveryConfigFields(config) {
+    const missing = [];
+    if (!config.serviceId) missing.push("Service ID");
+    if (!config.templateId) missing.push("Template ID");
+    if (!config.publicKey) missing.push("Public Key");
+    return missing;
+}
+
+async function sendRecoveryEmailViaApi(user) {
+    const config = getRecoveryEmailConfig();
+    const missing = getMissingRecoveryConfigFields(config);
+
+    if (missing.length > 0) {
+        return { ok: false, reason: "missing-config", missing };
+    }
+
+    const payload = {
+        service_id: config.serviceId,
+        template_id: config.templateId,
+        user_id: config.publicKey,
+        template_params: {
+            to_email: user.email,
+            email: user.email,
+            user_email: user.email,
+            to_name: user.name || user.username,
+            role: user.role,
+            username: user.username,
+            password: user.password,
+            cnic: user.cnic || '',
+            from_name: config.fromName,
+            from: config.fromName,
+            portal_name: "Pakistan Green Building Codes Portal",
+            reply_to: user.email,
+            message: `Role: ${user.role} | Username: ${user.username} | Password: ${user.password}`
+        }
+    };
+
+    try {
+        const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const responseText = await response.text();
+            return { ok: false, reason: `api-failed:${response.status}`, details: responseText };
+        }
+
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, reason: "network-error", details: String(error?.message || error) };
+    }
 }
 
 async function findProfileByUsernameOrEmail(supabaseClient, identifier, role) {
@@ -974,13 +1052,6 @@ async function handleLogin() {
 }
 
 async function handleForgotCredentials() {
-    const role = document.getElementById("loginRole")?.value;
-
-    if (!role || (role !== "Public" && role !== "Engineer")) {
-        alert("Please select role as Public or Engineer first.");
-        return;
-    }
-
     const supabaseClient = getSupabaseClient();
     if (!supabaseClient) {
         alert("Cloud recovery service is unavailable right now. Please try again shortly.");
@@ -993,39 +1064,12 @@ async function handleForgotCredentials() {
         return;
     }
 
-    const enteredUsername = prompt("Enter your registered username:");
-    if (!enteredUsername || !enteredUsername.trim()) {
-        alert("Registered username is required.");
-        return;
-    }
-
-    const enteredCnic = prompt("Enter your CNIC (e.g., 12345-1234567-1):");
-    if (!enteredCnic || !enteredCnic.trim()) {
-        alert("CNIC is required for password reset.");
-        return;
-    }
-
-    const newPassword = prompt("Enter your new password:");
-    if (!newPassword || !newPassword.trim()) {
-        alert("New password is required.");
-        return;
-    }
-
-    const confirmPassword = prompt("Confirm your new password:");
-    if (newPassword !== confirmPassword) {
-        alert("Passwords do not match.");
-        return;
-    }
-
     const normalizedEmail = enteredEmail.trim().toLowerCase();
-    const normalizedUsername = enteredUsername.trim().toLowerCase();
-    const normalizedCnic = enteredCnic.replace(/-/g, '').trim();
 
     try {
         const { data: profile, error: profileError } = await supabaseClient
             .from('portal_profiles')
-            .select('id, username, cnic, role, email')
-            .eq('role', role)
+            .select('id, username, name, cnic, role, email, password')
             .eq('email', normalizedEmail)
             .limit(1)
             .maybeSingle();
@@ -1034,31 +1078,34 @@ async function handleForgotCredentials() {
             throw new Error(profileError.message);
         }
 
-        if (!profile) {
-            alert('No account found with this role and email.');
+        if (!profile || !profile.password) {
+            alert('No account found with this registered email.');
             return;
         }
 
-        const usernameMatches = String(profile.username || '').trim().toLowerCase() === normalizedUsername;
-        const cnicMatches = String(profile.cnic || '').replace(/-/g, '').trim() === normalizedCnic;
+        const sendResult = await sendRecoveryEmailViaApi({
+            role: profile.role,
+            username: profile.username,
+            name: profile.name,
+            email: profile.email,
+            password: profile.password,
+            cnic: profile.cnic || ''
+        });
 
-        if (!usernameMatches || !cnicMatches) {
-            alert('Identity verification failed. Please check username and CNIC.');
+        if (sendResult.ok) {
+            alert(`Recovery email sent successfully to ${profile.email}.`);
             return;
         }
 
-        const { error: updateError } = await supabaseClient
-            .from('portal_profiles')
-            .update({ password: newPassword })
-            .eq('id', profile.id);
-
-        if (updateError) {
-            throw new Error(updateError.message);
+        if (sendResult.reason === "missing-config") {
+            const missingFieldsText = (sendResult.missing || []).join(", ");
+            alert(`Recovery email service is not configured. Missing: ${missingFieldsText}. Please configure recovery email settings in Admin Library page.`);
+            return;
         }
 
-        alert('Password reset successful. Please login with your new password.');
+        alert("Recovery email could not be sent right now. Please try again in a moment.");
     } catch (error) {
-        alert(`Password reset failed: ${String(error?.message || error)}`);
+        alert(`Recovery failed: ${String(error?.message || error)}`);
     }
 }
 
