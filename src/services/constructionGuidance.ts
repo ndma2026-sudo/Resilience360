@@ -35,8 +35,22 @@ const postJsonWithFallback = async (path: string, payload: object): Promise<Resp
         body: JSON.stringify(payload),
       })
 
-      if (response.status !== 404) return response
-      lastError = new Error(`Route not found on ${target}`)
+      const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+      const isJsonResponse = contentType.includes('application/json')
+
+      if (response.ok) return response
+
+      if ((response.status === 404 || response.status === 405) && !isJsonResponse) {
+        lastError = new Error(`Guidance route unavailable on ${target} (${response.status})`)
+        continue
+      }
+
+      if (!isJsonResponse) {
+        lastError = new Error(`Guidance API returned non-JSON response (${response.status}) from ${target}`)
+        continue
+      }
+
+      return response
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Network request failed')
     }
