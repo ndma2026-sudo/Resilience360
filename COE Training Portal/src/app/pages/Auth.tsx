@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 export function Auth() {
   const navigate = useNavigate();
-  const { login, signup } = useAuth();
+  const { login, signup, recoverTraineeAccess } = useAuth();
 
   // Admin login state
   const [adminEmail, setAdminEmail] = useState("");
@@ -30,6 +30,9 @@ export function Auth() {
   // Trainee login state
   const [traineeLoginEmail, setTraineeLoginEmail] = useState("");
   const [traineeLoginCnic, setTraineeLoginCnic] = useState("");
+  const [showRecoveryForm, setShowRecoveryForm] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryCnic, setRecoveryCnic] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -122,6 +125,33 @@ export function Auth() {
   const handleTraineeInputChange = (field: string, value: string) => {
     setTraineeData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: "" }));
+  };
+
+  const handleRecoverAccess = async () => {
+
+    const nextErrors: Record<string, string> = {};
+    if (!recoveryEmail.trim()) nextErrors.recoveryEmail = "Email is required";
+    if (recoveryEmail && !/\S+@\S+\.\S+/.test(recoveryEmail)) nextErrors.recoveryEmail = "Invalid email format";
+    if (!recoveryCnic.trim()) nextErrors.recoveryCnic = "CNIC is required";
+    if (recoveryCnic && !/^\d{13}$/.test(recoveryCnic.replace(/-/g, ""))) {
+      nextErrors.recoveryCnic = "CNIC must be 13 digits (e.g., 12345-1234567-1)";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...nextErrors }));
+      return;
+    }
+
+    const success = await recoverTraineeAccess(recoveryEmail.trim(), recoveryCnic.trim());
+
+    if (success) {
+      toast.success("Account recovered successfully. You are now signed in.");
+      navigate("/");
+      return;
+    }
+
+    toast.error("Recovery failed. Please check your registered email and CNIC.");
+    setErrors((prev) => ({ ...prev, recoveryEmail: "Recovery failed" }));
   };
 
   return (
@@ -339,6 +369,62 @@ export function Auth() {
                   <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
                     Login
                   </Button>
+
+                  <p className="text-sm text-center text-gray-600">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecoveryForm((prev) => !prev)}
+                      className="text-green-700 hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </p>
+
+                  {showRecoveryForm && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
+                      <p className="text-xs text-amber-900">
+                        Recover your account with your registered email and CNIC. This works across all devices.
+                      </p>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="recovery-email">Registered Email</Label>
+                          <Input
+                            id="recovery-email"
+                            type="email"
+                            placeholder="your.email@example.com"
+                            value={recoveryEmail}
+                            onChange={(e) => {
+                              setRecoveryEmail(e.target.value);
+                              setErrors((prev) => ({ ...prev, recoveryEmail: "" }));
+                            }}
+                          />
+                          {errors.recoveryEmail && <p className="text-xs text-red-600">{errors.recoveryEmail}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="recovery-cnic">CNIC</Label>
+                          <Input
+                            id="recovery-cnic"
+                            placeholder="12345-1234567-1"
+                            value={recoveryCnic}
+                            onChange={(e) => {
+                              setRecoveryCnic(e.target.value);
+                              setErrors((prev) => ({ ...prev, recoveryCnic: "" }));
+                            }}
+                          />
+                          {errors.recoveryCnic && <p className="text-xs text-red-600">{errors.recoveryCnic}</p>}
+                        </div>
+
+                        <Button
+                          type="button"
+                          className="w-full bg-amber-600 hover:bg-amber-700"
+                          onClick={handleRecoverAccess}
+                        >
+                          Recover Account
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   <p className="text-sm text-center text-gray-600">
                     Don't have an account?{" "}

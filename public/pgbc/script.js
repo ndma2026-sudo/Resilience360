@@ -2,13 +2,6 @@ let currentUser = null;
 let codes = JSON.parse(localStorage.getItem("codes")) || [];
 let deletedPredefinedCodes = JSON.parse(localStorage.getItem("deletedPredefinedCodes")) || [];
 
-const DEFAULT_RECOVERY_EMAILJS_CONFIG = {
-    serviceId: 'service_0kiqxra',
-    templateId: 'template_4uniopo',
-    publicKey: '25iaOSGu9AvtiAydP',
-    fromName: 'Pakistan Green Building Codes Portal'
-};
-
 const SUPABASE_URL = 'https://glbhizmhrwqomcrxsflb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsYmhpem1ocndxb21jcnhzZmxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0MzI1ODQsImV4cCI6MjA4NzAwODU4NH0.ZyswE5tt3lFaXgfKDABI25q8u3RNBKGKWJBAilQqvvY';
 
@@ -49,22 +42,6 @@ async function findProfileByUsernameOrEmail(supabaseClient, identifier, role) {
     const { data, error } = await query.maybeSingle();
     if (error) {
         throw new Error(`Profile lookup failed: ${error.message}`);
-    }
-
-    return data || null;
-}
-
-async function findProfileByRecoveryEmail(supabaseClient, email, role) {
-    const { data, error } = await supabaseClient
-        .from('portal_profiles')
-        .select('id, username, role, name, email, password')
-        .eq('role', role)
-        .eq('email', email)
-        .limit(1)
-        .maybeSingle();
-
-    if (error) {
-        throw new Error(`Recovery profile lookup failed: ${error.message}`);
     }
 
     return data || null;
@@ -996,91 +973,17 @@ async function handleLogin() {
     }
 }
 
-function getRecoveryEmailConfig() {
-    const serviceId = (localStorage.getItem("recovery_emailjs_service_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.serviceId).trim();
-    const templateId = (localStorage.getItem("recovery_emailjs_template_id") || DEFAULT_RECOVERY_EMAILJS_CONFIG.templateId).trim();
-    const publicKey = (localStorage.getItem("recovery_emailjs_public_key") || DEFAULT_RECOVERY_EMAILJS_CONFIG.publicKey).trim();
-    const fromName = (localStorage.getItem("recovery_from_name") || DEFAULT_RECOVERY_EMAILJS_CONFIG.fromName).trim();
-
-    if (!localStorage.getItem("recovery_emailjs_service_id")) {
-        localStorage.setItem("recovery_emailjs_service_id", serviceId);
-    }
-    if (!localStorage.getItem("recovery_emailjs_template_id")) {
-        localStorage.setItem("recovery_emailjs_template_id", templateId);
-    }
-    if (!localStorage.getItem("recovery_emailjs_public_key")) {
-        localStorage.setItem("recovery_emailjs_public_key", publicKey);
-    }
-    if (!localStorage.getItem("recovery_from_name")) {
-        localStorage.setItem("recovery_from_name", fromName);
-    }
-
-    return {
-        serviceId,
-        templateId,
-        publicKey,
-        fromName
-    };
-}
-
-function getMissingRecoveryConfigFields(config) {
-    const missing = [];
-    if (!config.serviceId) missing.push("Service ID");
-    if (!config.templateId) missing.push("Template ID");
-    if (!config.publicKey) missing.push("Public Key");
-    return missing;
-}
-
-async function sendRecoveryEmailViaApi(user) {
-    const config = getRecoveryEmailConfig();
-    const missing = getMissingRecoveryConfigFields(config);
-    if (missing.length > 0) {
-        return { ok: false, reason: "missing-config", missing };
-    }
-
-    const payload = {
-        service_id: config.serviceId,
-        template_id: config.templateId,
-        user_id: config.publicKey,
-        template_params: {
-            to_email: user.email,
-            email: user.email,
-            user_email: user.email,
-            to_name: user.name || user.username,
-            role: user.role,
-            username: user.username,
-            password: user.password,
-            from_name: config.fromName,
-            from: config.fromName,
-            reply_to: user.email
-        }
-    };
-
-    try {
-        const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const responseText = await response.text();
-            return { ok: false, reason: `api-failed:${response.status}`, details: responseText };
-        }
-
-        return { ok: true };
-    } catch (error) {
-        return { ok: false, reason: "network-error", details: String(error?.message || error) };
-    }
-}
-
 async function handleForgotCredentials() {
     const role = document.getElementById("loginRole")?.value;
 
     if (!role || (role !== "Public" && role !== "Engineer")) {
         alert("Please select role as Public or Engineer first.");
+        return;
+    }
+
+    const supabaseClient = getSupabaseClient();
+    if (!supabaseClient) {
+        alert("Cloud recovery service is unavailable right now. Please try again shortly.");
         return;
     }
 
@@ -1090,77 +993,73 @@ async function handleForgotCredentials() {
         return;
     }
 
-    const normalizedEmail = enteredEmail.trim().toLowerCase();
-    const supabaseClient = getSupabaseClient();
-    let matchedUser = null;
+    const enteredUsername = prompt("Enter your registered username:");
+    if (!enteredUsername || !enteredUsername.trim()) {
+        alert("Registered username is required.");
+        return;
+    }
 
-    if (supabaseClient) {
-        try {
-            const cloudProfile = await findProfileByRecoveryEmail(supabaseClient, normalizedEmail, role);
-            if (cloudProfile) {
-                matchedUser = {
-                    role: cloudProfile.role,
-                    username: cloudProfile.username,
-                    name: cloudProfile.name,
-                    email: cloudProfile.email,
-                    password: cloudProfile.password || ''
-                };
-            }
-        } catch (error) {
-            alert(`Cloud recovery lookup failed: ${String(error?.message || error)}`);
+    const enteredCnic = prompt("Enter your CNIC (e.g., 12345-1234567-1):");
+    if (!enteredCnic || !enteredCnic.trim()) {
+        alert("CNIC is required for password reset.");
+        return;
+    }
+
+    const newPassword = prompt("Enter your new password:");
+    if (!newPassword || !newPassword.trim()) {
+        alert("New password is required.");
+        return;
+    }
+
+    const confirmPassword = prompt("Confirm your new password:");
+    if (newPassword !== confirmPassword) {
+        alert("Passwords do not match.");
+        return;
+    }
+
+    const normalizedEmail = enteredEmail.trim().toLowerCase();
+    const normalizedUsername = enteredUsername.trim().toLowerCase();
+    const normalizedCnic = enteredCnic.replace(/-/g, '').trim();
+
+    try {
+        const { data: profile, error: profileError } = await supabaseClient
+            .from('portal_profiles')
+            .select('id, username, cnic, role, email')
+            .eq('role', role)
+            .eq('email', normalizedEmail)
+            .limit(1)
+            .maybeSingle();
+
+        if (profileError) {
+            throw new Error(profileError.message);
+        }
+
+        if (!profile) {
+            alert('No account found with this role and email.');
             return;
         }
+
+        const usernameMatches = String(profile.username || '').trim().toLowerCase() === normalizedUsername;
+        const cnicMatches = String(profile.cnic || '').replace(/-/g, '').trim() === normalizedCnic;
+
+        if (!usernameMatches || !cnicMatches) {
+            alert('Identity verification failed. Please check username and CNIC.');
+            return;
+        }
+
+        const { error: updateError } = await supabaseClient
+            .from('portal_profiles')
+            .update({ password: newPassword })
+            .eq('id', profile.id);
+
+        if (updateError) {
+            throw new Error(updateError.message);
+        }
+
+        alert('Password reset successful. Please login with your new password.');
+    } catch (error) {
+        alert(`Password reset failed: ${String(error?.message || error)}`);
     }
-
-    if (!matchedUser) {
-        matchedUser = users.find(user =>
-            user.role === role &&
-            String(user.email || '').trim().toLowerCase() === normalizedEmail
-        );
-    }
-
-    if (!matchedUser) {
-        alert("No account found with this role and registered email.");
-        return;
-    }
-
-    const sendResult = await sendRecoveryEmailViaApi(matchedUser);
-
-    if (sendResult.ok) {
-        alert(`Recovery email sent successfully to ${matchedUser.email}.`);
-        return;
-    }
-
-    const subject = encodeURIComponent("GBCP Portal - Account Credential Recovery");
-    const body = encodeURIComponent(
-        `Assalam-o-Alaikum,\n\n` +
-        `As requested, your registered account credentials are:\n` +
-        `Role: ${matchedUser.role}\n` +
-        `Username: ${matchedUser.username}\n` +
-        `Password: ${matchedUser.password}\n\n` +
-        `Please login and change your password if needed.\n\n` +
-        `Pakistan Green Building Codes Portal`
-    );
-
-    const mailtoUrl = `mailto:${encodeURIComponent(matchedUser.email)}?subject=${subject}&body=${body}`;
-    window.location.href = mailtoUrl;
-
-    if (sendResult.reason === "missing-config") {
-        const missingFieldsText = (sendResult.missing || []).join(", ");
-        alert(
-            `Automatic recovery email is not configured yet.\n` +
-            `Missing: ${missingFieldsText}.\n\n` +
-            `Admin setup path: Login as Admin → Codes Library → Recovery Email API settings.\n` +
-            `Fallback email draft has been opened for ${matchedUser.email}.`
-        );
-        return;
-    }
-
-    alert(
-        `Automatic recovery email could not be sent right now.\n` +
-        `Fallback email draft opened for ${matchedUser.email}.\n` +
-        `Reason: ${sendResult.reason}${sendResult.details ? `\nDetails: ${String(sendResult.details).slice(0, 220)}` : ''}`
-    );
 }
 
 function handleAdminLogin() {

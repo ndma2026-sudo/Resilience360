@@ -26,6 +26,7 @@ type User = Trainee | Admin;
 interface AuthContextType {
   user: User | null;
   login: (email: string, password?: string) => Promise<boolean>;
+  recoverTraineeAccess: (email: string, cnic: string) => Promise<boolean>;
   signup: (data: Omit<Trainee, "id" | "role" | "enrolledCourses" | "courseProgress" | "completedModules">) => Promise<boolean>;
   updateProfile: (data: {
     name: string;
@@ -204,6 +205,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const recoverTraineeAccess = async (email: string, cnic: string): Promise<boolean> => {
+    const normalizedProvidedCnic = String(cnic ?? "").replace(/-/g, "").trim();
+    if (!email || !normalizedProvidedCnic) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=eq.${encodeURIComponent(email)}&limit=1`,
+        {
+          headers: SUPABASE_HEADERS,
+        },
+      );
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const rows = await response.json();
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return false;
+      }
+
+      const normalizedStoredCnic = String(rows[0]?.cnic ?? "").replace(/-/g, "").trim();
+      if (!normalizedStoredCnic || normalizedProvidedCnic !== normalizedStoredCnic) {
+        return false;
+      }
+
+      const trainee = mapTraineeFromDb(rows[0]);
+      persistSessionUser(trainee);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem("ndma_user");
@@ -358,6 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         login,
+        recoverTraineeAccess,
         signup,
         updateProfile,
         logout,
