@@ -1129,7 +1129,7 @@ function App() {
     setApplyBestPracticeTitle(nextBestPractice)
   }
 
-  const downloadApplyGuidanceReport = async (reportLanguage: 'english' | 'urdu') => {
+  const downloadApplyGuidanceWordReport = async () => {
     if (!constructionGuidance) return
 
     let reportImages = guidanceStepImages
@@ -1160,206 +1160,100 @@ function App() {
       }
     }
 
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 12
-    const contentWidth = pageWidth - margin * 2
-    const footerY = pageHeight - 10
-    const generatedAt = new Date().toLocaleString()
+    const escapeHtml = (value: string) =>
+      value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;')
 
-    let cursorY = 20
-    let pageNumber = 1
-
-    const drawPageFrame = () => {
-      doc.setDrawColor(190, 208, 224)
-      doc.setLineWidth(0.5)
-      doc.roundedRect(7, 7, pageWidth - 14, pageHeight - 14, 2, 2)
-    }
-
-    const drawPageHeader = (continued = false) => {
-      const reportTitle = reportLanguage === 'english'
-        ? 'Resilience360 Construction Guidance in English Report'
-        : 'Resilience360 Construction Guidance in Urdu Report'
-
-      drawPageFrame()
-      doc.setFillColor(238, 246, 255)
-      doc.setDrawColor(199, 219, 238)
-      doc.roundedRect(margin, 12, contentWidth, 16, 2, 2, 'FD')
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(24, 66, 105)
-      doc.setFontSize(13)
-      doc.text(continued ? `${reportTitle} (Continued)` : reportTitle, margin + 3, 19)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9.5)
-      doc.setTextColor(46, 71, 93)
-      doc.text(`${applyCity}, ${applyProvince} · Hazard: ${applyHazard} · Best Practice: ${applyBestPracticeTitle}`, margin + 3, 24)
-    }
-
-    const drawFooter = () => {
-      doc.setDrawColor(221, 231, 241)
-      doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(120, 80, 52)
-      doc.text(`Generated: ${generatedAt}`, margin, footerY)
-      doc.text(`Page ${pageNumber}`, pageWidth - margin, footerY, { align: 'right' })
-    }
-
-    const ensureSpace = (requiredHeight: number) => {
-      if (cursorY + requiredHeight <= footerY - 4) return
-      drawFooter()
-      doc.addPage()
-      pageNumber += 1
-      drawPageHeader(true)
-    }
-
-    const drawSection = (title: string, bodyLines: string[]) => {
-      const wrappedLines = bodyLines.flatMap((line) => doc.splitTextToSize(line, contentWidth - 8))
-      const sectionHeight = 8 + wrappedLines.length * 5 + 6
-      ensureSpace(sectionHeight)
-
-      doc.setFillColor(249, 252, 255)
-      doc.setDrawColor(206, 220, 236)
-      doc.roundedRect(margin, cursorY, contentWidth, sectionHeight, 2, 2, 'FD')
-
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(25, 76, 117)
-      doc.setFontSize(10)
-      doc.text(title, margin + 3, cursorY + 5)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(40, 65, 88)
-      doc.setFontSize(9.5)
-
-      let lineY = cursorY + 10
-      for (const line of wrappedLines) {
-        doc.text(line, margin + 4, lineY)
-        lineY += 5
-      }
-
-      cursorY += sectionHeight + 4
-    }
-
-    const drawStep = (
-      step: { title: string; description: string; keyChecks: string[] },
-      index: number,
-      imageDataUrl?: string | null,
-      labels?: { step: string; keyChecks: string },
-    ) => {
-      const keyChecks = step.keyChecks.map((item) => `- ${item}`)
-      const stepLines = [step.description, labels?.keyChecks ?? 'Key Checks:', ...keyChecks]
-      const wrappedStepLines = stepLines.flatMap((line) => doc.splitTextToSize(line, contentWidth - 8))
-      const lineBlockHeight = wrappedStepLines.length * 5
-      const textBlockHeight = 12 + lineBlockHeight + 8
-
-      ensureSpace(textBlockHeight)
-
-      doc.setFillColor(255, 255, 255)
-      doc.setDrawColor(204, 219, 235)
-      doc.roundedRect(margin, cursorY, contentWidth, textBlockHeight, 2, 2, 'FD')
-
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(24, 66, 105)
-      doc.setFontSize(10)
-      doc.text(`${labels?.step ?? 'Step'} ${index + 1}: ${step.title}`, margin + 3, cursorY + 6)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(46, 71, 93)
-      doc.setFontSize(9.5)
-
-      let textY = cursorY + 12
-      for (const line of wrappedStepLines) {
-        doc.text(line, margin + 4, textY)
-        textY += 5
-      }
-
-      cursorY += textBlockHeight + 4
-
-      if (!imageDataUrl) return
-
-      let imageWidth = contentWidth - 18
-      let imageHeight = 46
-
-      try {
-        const imageProps = doc.getImageProperties(imageDataUrl)
-        const maxImageWidth = contentWidth - 18
-        const maxImageHeight = 62
-        const naturalRatio = imageProps.height / imageProps.width
-        if (Number.isFinite(naturalRatio) && naturalRatio > 0) {
-          imageHeight = Math.min(maxImageHeight, maxImageWidth * naturalRatio)
-          imageWidth = imageHeight / naturalRatio
-          if (imageWidth > maxImageWidth) {
-            imageWidth = maxImageWidth
-            imageHeight = imageWidth * naturalRatio
-          }
-        }
-      } catch {
-        imageWidth = contentWidth - 18
-        imageHeight = 46
-      }
-
-      const imageCardHeight = imageHeight + 14
-      ensureSpace(imageCardHeight)
-
-      doc.setFillColor(252, 253, 255)
-      doc.setDrawColor(218, 229, 240)
-      doc.roundedRect(margin, cursorY, contentWidth, imageCardHeight, 2, 2, 'FD')
-
-      const imageX = margin + (contentWidth - imageWidth) / 2
-      const imageY = cursorY + 7
-
-      try {
-        doc.addImage(imageDataUrl, 'PNG', imageX, imageY, imageWidth, imageHeight)
-      } catch {
-        doc.setFontSize(9)
-        doc.setTextColor(120, 80, 52)
-        doc.text('Step image preview unavailable in PDF export.', margin + 4, cursorY + 10)
-      }
-
-      cursorY += imageCardHeight + 4
-    }
-
-    drawPageHeader()
-
-    if (reportLanguage === 'english') {
-      drawSection('Project Context', [
-        `Province: ${applyProvince}`,
-        `City: ${applyCity}`,
-        `Hazard Focus: ${applyHazard}`,
-        `Best Practice: ${applyBestPracticeTitle}`,
-        `Structure Type: ${structureType}`,
-      ])
-
-      drawSection('Executive Summary (English)', [constructionGuidance.summary])
-      drawSection('Recommended Materials (English)', constructionGuidance.materials.map((item) => `- ${item}`))
-      drawSection('Safety Requirements (English)', constructionGuidance.safety.map((item) => `- ${item}`))
-
-      for (const [index, step] of constructionGuidance.steps.entries()) {
+    const renderedAt = new Date().toLocaleString()
+    const stepCards = constructionGuidance.steps
+      .map((step, index) => {
         const image = reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
-        drawStep(step, index, image?.imageDataUrl, { step: 'Step', keyChecks: 'Key Checks:' })
-      }
-    } else {
-      drawSection('پروجیکٹ کا تناظر', [
-        `صوبہ: ${applyProvince}`,
-        `شہر: ${applyCity}`,
-        `بنیادی خطرہ: ${applyHazard}`,
-        `بہترین طریقہ کار: ${applyBestPracticeTitle}`,
-        `عمارت کی قسم: ${structureType}`,
-      ])
+        const keyChecksHtml = step.keyChecks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+        const imageHtml = image?.imageDataUrl
+          ? `<div class="step-image-wrap"><img src="${image.imageDataUrl}" alt="Step ${index + 1} visual" class="step-image" /></div>`
+          : '<p class="muted">Image unavailable for this step.</p>'
 
-      drawSection('خلاصہ (اردو)', [constructionGuidance.summaryUrdu])
-      drawSection('تجویز کردہ مواد (اردو)', constructionGuidance.materialsUrdu.map((item) => `- ${item}`))
-      drawSection('حفاظتی ہدایات (اردو)', constructionGuidance.safetyUrdu.map((item) => `- ${item}`))
+        return `
+          <section class="step-card">
+            <h3>Step ${index + 1}: ${escapeHtml(step.title)}</h3>
+            <p>${escapeHtml(step.description)}</p>
+            ${imageHtml}
+            <h4>Key Checks</h4>
+            <ul>${keyChecksHtml}</ul>
+          </section>
+        `
+      })
+      .join('')
 
-      for (const [index, step] of constructionGuidance.stepsUrdu.entries()) {
-        const image = reportImages[index]
-        drawStep(step, index, image?.imageDataUrl, { step: 'مرحلہ', keyChecks: 'اہم جانچ نکات:' })
-      }
-    }
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Resilience360 Construction Guidance Report</title>
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; color: #1f2937; margin: 28px; }
+            .header { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px 16px; background: #eff6ff; }
+            .header h1 { margin: 0 0 6px 0; font-size: 22px; color: #1e3a5f; }
+            .meta { font-size: 13px; color: #334155; }
+            .section { margin-top: 16px; border: 1px solid #dbe5f0; border-radius: 10px; padding: 12px 14px; background: #ffffff; }
+            .section h2 { margin: 0 0 8px 0; font-size: 18px; color: #1e3a5f; }
+            ul { margin: 8px 0 0 20px; }
+            li { margin-bottom: 4px; }
+            .step-card { margin-top: 16px; border: 1px solid #dbe5f0; border-radius: 10px; padding: 12px 14px; }
+            .step-card h3 { margin: 0 0 8px 0; font-size: 16px; color: #1e3a5f; }
+            .step-card h4 { margin: 10px 0 6px 0; font-size: 14px; color: #1e3a5f; }
+            .step-image-wrap { margin-top: 10px; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #f8fafc; }
+            .step-image { max-width: 100%; max-height: 330px; width: auto; height: auto; border-radius: 6px; }
+            .muted { color: #64748b; font-size: 12px; }
+            .footer { margin-top: 22px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Resilience360 Construction Guidance in English Report</h1>
+            <div class="meta">
+              <strong>Area:</strong> ${escapeHtml(`${applyCity}, ${applyProvince}`)} &nbsp;|&nbsp;
+              <strong>Hazard:</strong> ${escapeHtml(applyHazard)} &nbsp;|&nbsp;
+              <strong>Best Practice:</strong> ${escapeHtml(applyBestPracticeTitle)} &nbsp;|&nbsp;
+              <strong>Generated:</strong> ${escapeHtml(renderedAt)}
+            </div>
+          </div>
 
-    drawFooter()
-    doc.save(`resilience360-guidance-report-${reportLanguage}-${applyProvince}-${applyCity}-${Date.now()}.pdf`)
+          <section class="section">
+            <h2>Executive Summary</h2>
+            <p>${escapeHtml(constructionGuidance.summary)}</p>
+          </section>
+
+          <section class="section">
+            <h2>Recommended Materials</h2>
+            <ul>${constructionGuidance.materials.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+          </section>
+
+          <section class="section">
+            <h2>Safety Requirements</h2>
+            <ul>${constructionGuidance.safety.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+          </section>
+
+          ${stepCards}
+
+          <div class="footer">Generated by Resilience360 • Professional Engineering Guidance Report</div>
+        </body>
+      </html>
+    `
+
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `resilience360-guidance-report-english-${applyProvince}-${applyCity}-${Date.now()}.doc`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.URL.revokeObjectURL(url)
   }
 
   const designHazardOverlay = useMemo(() => getHazardOverlay(designProvince, designCity), [designProvince, designCity])
@@ -3743,15 +3637,10 @@ function App() {
                     </>
                   )}
                   <div className="inline-controls">
-                    <button onClick={() => { void downloadApplyGuidanceReport('english') }} disabled={isGeneratingStepImages}>
+                    <button onClick={() => { void downloadApplyGuidanceWordReport() }} disabled={isGeneratingStepImages}>
                       {isGeneratingStepImages
-                        ? '📄 Preparing AI Images for English Report...'
-                        : '📄 Download English Guidance Report (PDF)'}
-                    </button>
-                    <button onClick={() => { void downloadApplyGuidanceReport('urdu') }} disabled={isGeneratingStepImages}>
-                      {isGeneratingStepImages
-                        ? '📄 اردو رپورٹ کے لیے AI تصاویر تیار کی جا رہی ہیں...'
-                        : '📄 اردو رہنمائی رپورٹ ڈاؤن لوڈ کریں (PDF)'}
+                        ? '📄 Preparing AI Images for English Word Report...'
+                        : '📄 Download English Guidance Report (Word)'}
                     </button>
                   </div>
                   {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
