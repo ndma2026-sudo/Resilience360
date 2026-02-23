@@ -4640,6 +4640,14 @@ function App() {
         <div className="panel section-panel section-learn">
           <h2>{t.sections.learn}</h2>
           <p>Watch IAPD training videos directly in-app. Videos are stream-only, support fullscreen, and are kept for offline use on installed builds.</p>
+          <div className="inline-controls">
+            <button
+              type="button"
+              onClick={() => window.open(`${import.meta.env.BASE_URL}coe-portal/index.html`, '_blank', 'noopener,noreferrer')}
+            >
+              🎓 Enroll in COE lectures
+            </button>
+          </div>
 
           {!isLearnVideoVisible && (
             <div className="card-grid learn-video-grid">
