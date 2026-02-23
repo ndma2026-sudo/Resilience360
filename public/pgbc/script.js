@@ -69,7 +69,7 @@ async function sendRecoveryEmailViaApi(user) {
         return { ok: false, reason: "missing-config", missing };
     }
 
-    const payload = {
+        const payload = {
         service_id: config.serviceId,
         template_id: config.templateId,
         user_id: config.publicKey,
@@ -90,21 +90,47 @@ async function sendRecoveryEmailViaApi(user) {
         }
     };
 
-    try {
+    const fallbackPayload = {
+        service_id: config.serviceId,
+        template_id: config.templateId,
+        user_id: config.publicKey,
+        template_params: {
+            to_email: user.email,
+            to_name: user.name || user.username,
+            from_name: config.fromName,
+            message: `Role: ${user.role}\nUsername: ${user.username}\nPassword: ${user.password}`
+        }
+    };
+
+    const trySend = async (bodyPayload) => {
         const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(bodyPayload)
         });
 
-        if (!response.ok) {
-            const responseText = await response.text();
-            return { ok: false, reason: `api-failed:${response.status}`, details: responseText };
+        if (response.ok) {
+            return { ok: true };
         }
 
-        return { ok: true };
+        const responseText = await response.text();
+        return { ok: false, reason: `api-failed:${response.status}`, details: responseText };
+    };
+
+    try {
+        const primary = await trySend(payload);
+        if (primary.ok) {
+            return primary;
+        }
+
+        const fallback = await trySend(fallbackPayload);
+        if (fallback.ok) {
+            return fallback;
+        }
+
+        return fallback;
     } catch (error) {
         return { ok: false, reason: "network-error", details: String(error?.message || error) };
     }
@@ -1067,7 +1093,7 @@ async function handleForgotCredentials() {
 
     try {
         const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/portal_profiles?select=id,username,name,cnic,role,email,password&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+            `${SUPABASE_URL}/rest/v1/portal_profiles?select=id,username,name,cnic,role,email,password&email=ilike.${encodeURIComponent(normalizedEmail)}&limit=1`,
             {
                 method: 'GET',
                 headers: SUPABASE_REST_HEADERS
@@ -1115,6 +1141,11 @@ async function handleForgotCredentials() {
         if (sendResult.reason === "missing-config") {
             const missingFieldsText = (sendResult.missing || []).join(", ");
             alert(`Recovery email service is not configured. Missing: ${missingFieldsText}. A fallback email draft has been opened.`);
+            return;
+        }
+
+        if (String(sendResult.details || '').toLowerCase().includes('invalid grant')) {
+            alert("Recovery provider authentication expired. A fallback email draft has been opened. Please reconnect Gmail in EmailJS service settings.");
             return;
         }
 

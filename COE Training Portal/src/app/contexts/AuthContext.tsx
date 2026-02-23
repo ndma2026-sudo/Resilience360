@@ -126,7 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password?: string): Promise<boolean> => {
-    if (email === ADMIN_CREDENTIALS.email) {
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+
+    if (normalizedEmail === ADMIN_CREDENTIALS.email) {
       const adminUser: Admin = {
         id: "admin-1",
         name: ADMIN_CREDENTIALS.name,
@@ -139,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=eq.${encodeURIComponent(email)}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=ilike.${encodeURIComponent(normalizedEmail)}&limit=1`,
         {
           headers: SUPABASE_HEADERS,
         },
@@ -173,9 +175,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: Omit<Trainee, "id" | "role" | "enrolledCourses" | "courseProgress" | "completedModules">,
   ): Promise<boolean> => {
     try {
+      const normalizedEmail = String(data.email ?? "").trim().toLowerCase();
       const payload = {
         name: data.name,
-        email: data.email,
+        email: normalizedEmail,
         qualifications: data.qualifications,
         university: data.university,
         cnic: data.cnic,
@@ -247,35 +250,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     };
 
-    try {
+    const fallbackPayload = {
+      service_id: config.serviceId,
+      template_id: config.templateId,
+      user_id: config.publicKey,
+      template_params: {
+        to_email: trainee.email,
+        to_name: trainee.name,
+        from_name: config.fromName,
+        message: `Email: ${trainee.email}\nPassword/Credential: ${trainee.cnic}`,
+      },
+    };
+
+    const trySend = async (bodyPayload: unknown) => {
       const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(bodyPayload),
       });
 
-      if (!response.ok) {
-        const responseText = await response.text();
-        return { ok: false, reason: `api-failed:${response.status}:${responseText.slice(0, 160)}` };
+      if (response.ok) {
+        return { ok: true };
       }
 
-      return { ok: true };
+      const responseText = await response.text();
+      return { ok: false, reason: `api-failed:${response.status}:${responseText.slice(0, 160)}` };
+    };
+
+    try {
+      const primary = await trySend(payload);
+      if (primary.ok) {
+        return primary;
+      }
+
+      const fallback = await trySend(fallbackPayload);
+      if (fallback.ok) {
+        return fallback;
+      }
+
+      return fallback;
     } catch {
       return { ok: false, reason: "network-error" };
     }
   };
 
   const sendTraineeCredentialsEmail = async (email: string): Promise<{ ok: boolean; reason?: string }> => {
-    const normalizedEmail = String(email ?? "").trim();
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
     if (!normalizedEmail) {
       return { ok: false, reason: "missing-email" };
     }
 
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/${COE_TABLE}?select=*&email=ilike.${encodeURIComponent(normalizedEmail)}&limit=1`,
         {
           headers: SUPABASE_HEADERS,
         },
