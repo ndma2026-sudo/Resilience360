@@ -877,6 +877,8 @@ function App() {
   const [isGeneratingStepImages, setIsGeneratingStepImages] = useState(false)
   const [guidanceError, setGuidanceError] = useState<string | null>(null)
   const [guidanceGenerationLanguage, setGuidanceGenerationLanguage] = useState<'english' | 'urdu'>('english')
+  const [isPreparingWordReport, setIsPreparingWordReport] = useState(false)
+  const [wordReportLanguage, setWordReportLanguage] = useState<'english' | 'urdu'>('english')
   const [infraModels, setInfraModels] = useState<InfraModel[]>(() => preloadedInfraModels)
   const [isLoadingInfraModels, setIsLoadingInfraModels] = useState(false)
   const [infraModelsError, setInfraModelsError] = useState<string | null>(null)
@@ -1141,35 +1143,40 @@ function App() {
   const downloadApplyGuidanceWordReport = async (reportLanguage: 'english' | 'urdu') => {
     if (!constructionGuidance) return
 
-    let reportImages = guidanceStepImages
-    if (reportImages.length < constructionGuidance.steps.length) {
-      try {
-        setIsGeneratingStepImages(true)
-        const imageResult = await generateGuidanceStepImages({
-          province: applyProvince,
-          city: applyCity,
-          hazard: applyHazard,
-          structureType,
-          bestPracticeName: applyBestPracticeTitle,
-          steps: constructionGuidance.steps,
-        })
+    setWordReportLanguage(reportLanguage)
+    setIsPreparingWordReport(true)
 
-        if (imageResult.images.length < constructionGuidance.steps.length) {
-          setGuidanceError('Report download blocked: all AI step images must be generated first. Please try again.')
+    try {
+
+      let reportImages = guidanceStepImages
+      const isEnglishReport = reportLanguage === 'english'
+      const reportSteps = isEnglishReport ? constructionGuidance.steps : constructionGuidance.stepsUrdu
+
+      if (reportImages.length < reportSteps.length) {
+        try {
+          const imageResult = await generateGuidanceStepImages({
+            province: applyProvince,
+            city: applyCity,
+            hazard: applyHazard,
+            structureType,
+            bestPracticeName: applyBestPracticeTitle,
+            steps: reportSteps,
+          })
+
+          if (imageResult.images.length < reportSteps.length) {
+            setGuidanceError('Report download blocked: all AI step images must be generated first. Please try again.')
+            return
+          }
+
+          reportImages = imageResult.images
+          setGuidanceStepImages(imageResult.images)
+        } catch (error) {
+          setGuidanceError(error instanceof Error ? error.message : 'Failed to generate AI images for report download.')
           return
         }
-
-        reportImages = imageResult.images
-        setGuidanceStepImages(imageResult.images)
-      } catch (error) {
-        setGuidanceError(error instanceof Error ? error.message : 'Failed to generate AI images for report download.')
-        return
-      } finally {
-        setIsGeneratingStepImages(false)
       }
-    }
 
-    const toImageBytes = (dataUrl: string): Uint8Array => {
+      const toImageBytes = (dataUrl: string): Uint8Array => {
       const base64 = dataUrl.split(',')[1] ?? ''
       const binary = window.atob(base64)
       const bytes = new Uint8Array(binary.length)
@@ -1179,7 +1186,7 @@ function App() {
       return bytes
     }
 
-    const getImageSize = (dataUrl: string): Promise<{ width: number; height: number }> =>
+      const getImageSize = (dataUrl: string): Promise<{ width: number; height: number }> =>
       new Promise((resolve) => {
         const img = new window.Image()
         img.onload = () => {
@@ -1195,27 +1202,24 @@ function App() {
         img.src = dataUrl
       })
 
-    const renderedAt = new Date().toLocaleString()
-    const isEnglishReport = reportLanguage === 'english'
-    const reportTitle = isEnglishReport
+      const renderedAt = new Date().toLocaleString()
+      const reportTitle = isEnglishReport
       ? 'Resilience360 Construction Guidance in English Report'
       : 'Resilience360 تعمیراتی رہنمائی رپورٹ (اردو)'
-    const areaLabel = isEnglishReport ? 'Area' : 'علاقہ'
-    const hazardLabel = isEnglishReport ? 'Hazard' : 'خطرہ'
-    const bestPracticeLabel = isEnglishReport ? 'Best Practice' : 'بہترین طریقہ کار'
-    const generatedLabel = isEnglishReport ? 'Generated' : 'تیار کردہ وقت'
-    const summaryHeading = isEnglishReport ? 'Executive Summary' : 'خلاصہ'
-    const materialsHeading = isEnglishReport ? 'Recommended Materials' : 'تجویز کردہ مواد'
-    const safetyHeading = isEnglishReport ? 'Safety Requirements' : 'حفاظتی ہدایات'
-    const stepLabel = isEnglishReport ? 'Step' : 'مرحلہ'
-    const keyChecksHeading = isEnglishReport ? 'Key Checks' : 'اہم جانچ نکات'
-    const stepVisualCaption = isEnglishReport ? 'Step visual' : 'مرحلے کی تصویر'
-    const reportSummary = isEnglishReport ? constructionGuidance.summary : constructionGuidance.summaryUrdu
-    const reportMaterials = isEnglishReport ? constructionGuidance.materials : constructionGuidance.materialsUrdu
-    const reportSafety = isEnglishReport ? constructionGuidance.safety : constructionGuidance.safetyUrdu
-    const reportSteps = isEnglishReport ? constructionGuidance.steps : constructionGuidance.stepsUrdu
-
-    const docChildren: Paragraph[] = [
+      const areaLabel = isEnglishReport ? 'Area' : 'علاقہ'
+      const hazardLabel = isEnglishReport ? 'Hazard' : 'خطرہ'
+      const bestPracticeLabel = isEnglishReport ? 'Best Practice' : 'بہترین طریقہ کار'
+      const generatedLabel = isEnglishReport ? 'Generated' : 'تیار کردہ وقت'
+      const summaryHeading = isEnglishReport ? 'Executive Summary' : 'خلاصہ'
+      const materialsHeading = isEnglishReport ? 'Recommended Materials' : 'تجویز کردہ مواد'
+      const safetyHeading = isEnglishReport ? 'Safety Requirements' : 'حفاظتی ہدایات'
+      const stepLabel = isEnglishReport ? 'Step' : 'مرحلہ'
+      const keyChecksHeading = isEnglishReport ? 'Key Checks' : 'اہم جانچ نکات'
+      const stepVisualCaption = isEnglishReport ? 'Step visual' : 'مرحلے کی تصویر'
+      const reportSummary = isEnglishReport ? constructionGuidance.summary : constructionGuidance.summaryUrdu
+      const reportMaterials = isEnglishReport ? constructionGuidance.materials : constructionGuidance.materialsUrdu
+      const reportSafety = isEnglishReport ? constructionGuidance.safety : constructionGuidance.safetyUrdu
+      const docChildren: Paragraph[] = [
       new Paragraph({
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
@@ -1241,23 +1245,23 @@ function App() {
       new Paragraph({ text: '', spacing: { after: 140 } }),
     ]
 
-    for (const [index, step] of reportSteps.entries()) {
-      const image = isEnglishReport
-        ? reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
-        : reportImages[index]
+      for (const [index, step] of reportSteps.entries()) {
+        const image = isEnglishReport
+          ? reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
+          : reportImages[index]
 
-      docChildren.push(
+        docChildren.push(
         new Paragraph({ heading: HeadingLevel.HEADING_2, text: `${stepLabel} ${index + 1}: ${step.title}`, spacing: { before: 240, after: 80 } }),
         new Paragraph({ text: step.description, spacing: { after: 100 } }),
         new Paragraph({ text: keyChecksHeading, heading: HeadingLevel.HEADING_3 }),
         ...step.keyChecks.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
       )
 
-      if (image?.imageDataUrl) {
-        const imageBytes = toImageBytes(image.imageDataUrl)
-        const imageSize = await getImageSize(image.imageDataUrl)
+        if (image?.imageDataUrl) {
+          const imageBytes = toImageBytes(image.imageDataUrl)
+          const imageSize = await getImageSize(image.imageDataUrl)
 
-        docChildren.push(
+          docChildren.push(
           new Paragraph({ text: '', spacing: { after: 80 } }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -1278,26 +1282,29 @@ function App() {
             children: [new TextRun({ text: `${stepLabel} ${index + 1} ${stepVisualCaption}`, italics: true, size: 18 })],
           }),
         )
+        }
       }
+
+      const report = new Document({
+        sections: [
+          {
+            children: docChildren,
+          },
+        ],
+      })
+
+      const blob = await Packer.toBlob(report)
+      const url = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `resilience360-guidance-report-${reportLanguage}-${applyProvince}-${applyCity}-${Date.now()}.docx`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      window.URL.revokeObjectURL(url)
+    } finally {
+      setIsPreparingWordReport(false)
     }
-
-    const report = new Document({
-      sections: [
-        {
-          children: docChildren,
-        },
-      ],
-    })
-
-    const blob = await Packer.toBlob(report)
-    const url = window.URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `resilience360-guidance-report-${reportLanguage}-${applyProvince}-${applyCity}-${Date.now()}.docx`
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    window.URL.revokeObjectURL(url)
   }
 
   const designHazardOverlay = useMemo(() => getHazardOverlay(designProvince, designCity), [designProvince, designCity])
@@ -3681,13 +3688,13 @@ function App() {
                     </>
                   )}
                   <div className="inline-controls">
-                    <button onClick={() => { void downloadApplyGuidanceWordReport('english') }} disabled={isGeneratingStepImages}>
-                      {isGeneratingStepImages
+                    <button onClick={() => { void downloadApplyGuidanceWordReport('english') }} disabled={isPreparingWordReport}>
+                      {isPreparingWordReport && wordReportLanguage === 'english'
                         ? '📄 Preparing AI Images for English Word Report...'
                         : '📄 Download English Guidance Report (Word)'}
                     </button>
-                    <button onClick={() => { void downloadApplyGuidanceWordReport('urdu') }} disabled={isGeneratingStepImages}>
-                      {isGeneratingStepImages
+                    <button onClick={() => { void downloadApplyGuidanceWordReport('urdu') }} disabled={isPreparingWordReport}>
+                      {isPreparingWordReport && wordReportLanguage === 'urdu'
                         ? '📄 اردو ورڈ رپورٹ کے لیے AI تصاویر تیار کی جا رہی ہیں...'
                         : '📄 اردو رہنمائی رپورٹ ڈاؤن لوڈ کریں (Word)'}
                     </button>
