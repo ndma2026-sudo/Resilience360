@@ -4217,6 +4217,7 @@ function App() {
               {pmdLiveSnapshot.mode === 'rss-fallback' && (
                 <p className="pmd-live-meta">PMD web endpoints are slow/unreachable right now; showing CAP RSS fallback updates.</p>
               )}
+              {pmdLiveSnapshot.warning && <p className="pmd-live-meta">{pmdLiveSnapshot.warning}</p>}
               {pmdLiveSnapshot.latestAlerts && pmdLiveSnapshot.latestAlerts.length > 0 && (
                 <div className="pmd-media-card">
                   <h4>Latest PMD Updates (CAP)</h4>

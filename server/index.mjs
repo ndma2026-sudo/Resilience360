@@ -184,7 +184,7 @@ app.get('/api/pmd/rss', async (_req, res) => {
   }
 })
 
-app.get('/api/pmd/live', async (_req, res) => {
+app.get('/api/pmd/live', async (req, res) => {
   try {
     const [homeResult, satelliteResult] = await Promise.allSettled([
       fetchRemoteText(PMD_HOME_URL, 32000),
@@ -196,29 +196,37 @@ app.get('/api/pmd/live', async (_req, res) => {
     const cities = homeHtml ? parsePmdCityTemperatures(homeHtml) : []
     const satelliteImageUrl = satelliteHtml ? parsePmdSatelliteImage(satelliteHtml) : null
     let latestAlerts = []
+    const forwardedProto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0]?.trim()
+    const protocol = forwardedProto || req.protocol || 'https'
+    const host = req.get('host')
+    const internalRssUrl = host ? `${protocol}://${host}/api/pmd/rss` : ''
 
     try {
       const rssXml = await fetchRemoteText(PMD_RSS_URL, 24000)
       latestAlerts = parsePmdRssItems(rssXml)
     } catch {
-      latestAlerts = []
+      if (internalRssUrl) {
+        try {
+          const rssXml = await fetchRemoteText(internalRssUrl, 24000)
+          latestAlerts = parsePmdRssItems(rssXml)
+        } catch {
+          latestAlerts = []
+        }
+      }
     }
 
-    if (homeResult.status === 'rejected' && satelliteResult.status === 'rejected' && latestAlerts.length === 0) {
-      const homeError = homeResult.reason instanceof Error ? homeResult.reason.message : 'PMD home fetch failed'
-      const satelliteError = satelliteResult.reason instanceof Error ? satelliteResult.reason.message : 'PMD satellite fetch failed'
-      throw new Error(`${homeError}; ${satelliteError}; PMD RSS fallback unavailable`)
-    }
+    const bothWebSourcesFailed = homeResult.status === 'rejected' && satelliteResult.status === 'rejected'
 
     res.json({
       source: 'PMD',
       updatedAt: new Date().toISOString(),
-      mode:
-        homeResult.status === 'fulfilled' || satelliteResult.status === 'fulfilled'
-          ? 'full-or-partial-web'
-          : 'rss-fallback',
+      mode: bothWebSourcesFailed ? (latestAlerts.length > 0 ? 'rss-fallback' : 'degraded-empty') : 'full-or-partial-web',
       cities,
       latestAlerts,
+      warning:
+        bothWebSourcesFailed && latestAlerts.length === 0
+          ? 'PMD web and RSS sources are temporarily unreachable. Retry in a minute.'
+          : undefined,
       links: {
         home: PMD_HOME_URL,
         radar: PMD_RADAR_URL,

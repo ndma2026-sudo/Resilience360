@@ -8,7 +8,8 @@ export type PmdCityTemperature = {
 export type PmdLiveSnapshot = {
   source: 'PMD'
   updatedAt: string
-  mode?: 'full-or-partial-web' | 'rss-fallback'
+  mode?: 'full-or-partial-web' | 'rss-fallback' | 'degraded-empty'
+  warning?: string
   cities: PmdCityTemperature[]
   latestAlerts?: Array<{
     id: string
