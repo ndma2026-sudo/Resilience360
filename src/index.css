@@ -537,6 +537,56 @@ img {
   padding: var(--space-3) var(--space-4) var(--space-2) 24px;
 }
 
+.section-learn p {
+  margin-bottom: var(--space-2);
+}
+
+.learn-video-grid {
+  margin-top: 0;
+}
+
+.learn-video-card {
+  border: 1px solid #d4e5f4;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fcff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.learn-video-card h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: #1d4e77;
+}
+
+.learn-video-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #2c4d67;
+}
+
+.learn-video-card button {
+  align-self: flex-start;
+}
+
+.learn-video-player-panel {
+  margin-top: var(--space-3);
+}
+
+.learn-training-video {
+  max-height: 66vh;
+}
+
+.learn-video-player-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
 .infra-video-panel {
   margin: 10px 0 14px;
   border: 1px solid #d5e4f2;

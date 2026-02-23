@@ -39,7 +39,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,json,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,json,woff2,mp4}'],
+        maximumFileSizeToCacheInBytes: 60 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/tile\.openstreetmap\.org\/.*/i,
@@ -50,6 +51,18 @@ export default defineConfig({
                 maxEntries: 220,
                 maxAgeSeconds: 60 * 60 * 24 * 14,
               },
+            },
+          },
+          {
+            urlPattern: /\/videos\/.*\.mp4$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'iapd-videos',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              rangeRequests: true,
             },
           },
         ],

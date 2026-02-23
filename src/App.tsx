@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import {
   AlignmentType,
@@ -98,6 +98,94 @@ type GlobalEarthquake = {
 const GLOBAL_EARTHQUAKE_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
 const GLOBAL_EARTHQUAKE_FEED_URL_BACKUP = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson'
 const GLOBAL_EARTHQUAKE_PROXY_PREFIX = 'https://api.allorigins.win/raw?url='
+
+type LearnTrainingVideo = {
+  id: string
+  title: string
+  summary: string
+  fileName: string
+}
+
+const learnTrainingVideos: LearnTrainingVideo[] = [
+  {
+    id: 'flood-barriers',
+    title: 'Flood Protection & Barriers',
+    summary: 'Practical barrier strategies and mitigation planning for flood-prone localities.',
+    fileName: '1-flood-protection-barriers-long-9-min.mp4',
+  },
+  {
+    id: 'monsoon-damages',
+    title: 'Monsoon 2025 Damages in Pakistan',
+    summary: 'Damage patterns from monsoon events and key infrastructure lessons.',
+    fileName: '2-monson-2025-damages-in-pakistan-fullforms.mp4',
+  },
+  {
+    id: 'global-best-practice',
+    title: 'Global Best Practice',
+    summary: 'Short global resilience examples relevant for local adaptation in Pakistan.',
+    fileName: '3-global-best-practice-3-min.mp4',
+  },
+  {
+    id: 'building-resilience-audit',
+    title: 'Building Resilience through Infra Audit',
+    summary: 'How to assess critical assets and prioritize safety upgrades.',
+    fileName: 'building-resilience-through-infra-audit.mp4',
+  },
+  {
+    id: 'floodplain-recovery',
+    title: 'Floodplains Resilient Recovery',
+    summary: 'Recovery and rebuilding approaches for floodplain communities.',
+    fileName: 'floodplains-resilient-recovery.mp4',
+  },
+  {
+    id: 'infra-damages',
+    title: 'Infrastructure Damages Overview',
+    summary: 'Visual overview of common damage mechanisms and risk hotspots.',
+    fileName: 'infra-damages.mp4',
+  },
+  {
+    id: 'innovative-tech',
+    title: 'Innovative Construction Technologies',
+    summary: 'Construction technology options for safer and more durable infrastructure.',
+    fileName: 'innovative-construction-technologies-final.mp4',
+  },
+  {
+    id: 'innovative-tech-sound',
+    title: 'Innovative Construction Technologies (Sound Added)',
+    summary: 'Audio-enhanced version for training sessions and classroom delivery.',
+    fileName: 'innovative-construction-technologies-sound-added.mp4',
+  },
+  {
+    id: 'modular-bridge',
+    title: 'Modular Bridge Video Animation',
+    summary: 'Modular bridge concept animation for rapid deployment and resilience.',
+    fileName: 'modular-bridge-video-animation-final.mp4',
+  },
+  {
+    id: 'resilient-structures',
+    title: 'Resilient Structures against EQ & Floods',
+    summary: 'Integrated design principles for earthquake and flood resilience.',
+    fileName: 'resilient-structures-against-eq-floods-23-08-24.mp4',
+  },
+  {
+    id: 'stormwater-management',
+    title: 'Stormwater Management & Permeable Pavement',
+    summary: 'Drainage and permeable pavement techniques to reduce flooding impacts.',
+    fileName: 'stormwater-mgt-through-improved-drainage-and-permeable-pavement-tech.mp4',
+  },
+  {
+    id: 'arc-overview',
+    title: 'ARC Overview',
+    summary: 'Supplementary resilience planning video for field awareness sessions.',
+    fileName: 'arc.mp4',
+  },
+  {
+    id: 'video-3',
+    title: 'Field Training Video 3',
+    summary: 'Additional field-focused training module for local teams.',
+    fileName: 'video-3.mp4',
+  },
+]
 
 const translations = {
   en: {
@@ -948,12 +1036,46 @@ function App() {
   const [floorAreaSqftCost, setFloorAreaSqftCost] = useState(1200)
   const [designSummaryText, setDesignSummaryText] = useState<string | null>(null)
   const [showTrainingPrograms] = useState(false)
+  const [activeLearnVideoFile, setActiveLearnVideoFile] = useState<string | null>(null)
+  const [isLearnVideoVisible, setIsLearnVideoVisible] = useState(false)
+  const learnVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const t = translations[language]
   const isUrdu = language === 'ur'
   const isHomeView = !activeSection
   const hasPreviousSection = sectionHistory.length > 0
   const infraLayoutVideoSrc = `${import.meta.env.BASE_URL}videos/layout.mp4`
+  const activeLearnVideo = useMemo(
+    () => learnTrainingVideos.find((video) => video.fileName === activeLearnVideoFile) ?? null,
+    [activeLearnVideoFile],
+  )
+
+  const openLearnVideoPlayer = useCallback((fileName: string) => {
+    setActiveLearnVideoFile(fileName)
+    setIsLearnVideoVisible(true)
+  }, [])
+
+  const openLearnVideoFullscreen = useCallback(() => {
+    const videoElement = learnVideoRef.current as
+      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => Promise<void> })
+      | null
+
+    if (!videoElement) return
+
+    if (videoElement.requestFullscreen) {
+      void videoElement.requestFullscreen()
+      return
+    }
+
+    if (videoElement.webkitRequestFullscreen) {
+      void videoElement.webkitRequestFullscreen()
+      return
+    }
+
+    if (videoElement.webkitEnterFullscreen) {
+      videoElement.webkitEnterFullscreen()
+    }
+  }, [])
 
   const navigateToSection = useCallback(
     (nextSection: SectionKey | null) => {
@@ -4500,12 +4622,41 @@ function App() {
       return (
         <div className="panel section-panel section-learn">
           <h2>{t.sections.learn}</h2>
-          <ul>
-            <li>Urdu + English micro-video tutorials for flood and seismic safety.</li>
-            <li>Downloadable PDF engineering guidelines and checklists.</li>
-            <li>Quizzes for schools and universities with score feedback.</li>
-            <li>Certification mini-courses for planners and local responders.</li>
-          </ul>
+          <p>Watch IAPD training videos directly in-app. Videos are stream-only, support fullscreen, and are kept for offline use on installed builds.</p>
+
+          <div className="card-grid learn-video-grid">
+            {learnTrainingVideos.map((video) => (
+              <article key={video.id} className="learn-video-card">
+                <h3>{video.title}</h3>
+                <p>{video.summary}</p>
+                <button onClick={() => openLearnVideoPlayer(video.fileName)}>▶️ Watch Video</button>
+              </article>
+            ))}
+          </div>
+
+          {isLearnVideoVisible && activeLearnVideo && (
+            <div className="infra-video-panel learn-video-player-panel">
+              <h3>Now Playing: {activeLearnVideo.title}</h3>
+              <video
+                key={activeLearnVideo.fileName}
+                ref={learnVideoRef}
+                className="infra-layout-video learn-training-video"
+                controls
+                autoPlay
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                disablePictureInPicture
+                onContextMenu={(event) => event.preventDefault()}
+                preload="metadata"
+              >
+                <source src={`${import.meta.env.BASE_URL}videos/iapd-web/${activeLearnVideo.fileName}`} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              <div className="learn-video-player-actions">
+                <button onClick={openLearnVideoFullscreen}>⛶ Full Screen</button>
+                <button onClick={() => setIsLearnVideoVisible(false)}>⏹️ Hide Video</button>
+              </div>
+            </div>
+          )}
         </div>
       )
     }
