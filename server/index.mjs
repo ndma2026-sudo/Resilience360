@@ -156,13 +156,22 @@ app.get('/api/pmd/rss', async (_req, res) => {
 
 app.get('/api/pmd/live', async (_req, res) => {
   try {
-    const [homeHtml, satelliteHtml] = await Promise.all([
-      fetchRemoteText(PMD_HOME_URL),
-      fetchRemoteText(PMD_SATELLITE_URL),
+    const [homeResult, satelliteResult] = await Promise.allSettled([
+      fetchRemoteText(PMD_HOME_URL, 32000),
+      fetchRemoteText(PMD_SATELLITE_URL, 32000),
     ])
 
-    const cities = parsePmdCityTemperatures(homeHtml)
-    const satelliteImageUrl = parsePmdSatelliteImage(satelliteHtml)
+    const homeHtml = homeResult.status === 'fulfilled' ? homeResult.value : ''
+    const satelliteHtml = satelliteResult.status === 'fulfilled' ? satelliteResult.value : ''
+    const cities = homeHtml ? parsePmdCityTemperatures(homeHtml) : []
+    const satelliteImageUrl = satelliteHtml ? parsePmdSatelliteImage(satelliteHtml) : null
+
+    if (homeResult.status === 'rejected' && satelliteResult.status === 'rejected') {
+      const homeError = homeResult.reason instanceof Error ? homeResult.reason.message : 'PMD home fetch failed'
+      const satelliteError =
+        satelliteResult.reason instanceof Error ? satelliteResult.reason.message : 'PMD satellite fetch failed'
+      throw new Error(`${homeError}; ${satelliteError}`)
+    }
 
     res.json({
       source: 'PMD',

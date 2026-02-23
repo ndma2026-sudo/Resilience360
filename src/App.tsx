@@ -2609,7 +2609,7 @@ function App() {
 
   useEffect(() => {
     if (activeSection !== 'warning') return
-    if (!pmdLiveSnapshot?.cities?.length) {
+    if (!pmdLiveSnapshot) {
       void loadPmdLive()
     }
 
@@ -2618,7 +2618,7 @@ function App() {
     }, 180000)
 
     return () => window.clearInterval(timer)
-  }, [activeSection, loadPmdLive, pmdLiveSnapshot?.cities?.length])
+  }, [activeSection, loadPmdLive, pmdLiveSnapshot])
 
   useEffect(() => {
     const onHashChange = () => {
@@ -4199,17 +4199,21 @@ function App() {
           {alertError && <p>{alertError}</p>}
           {pmdLiveError && <p>{pmdLiveError}</p>}
 
-          {pmdLiveSnapshot?.cities?.length ? (
+          {pmdLiveSnapshot ? (
             <div className="pmd-live-widget">
               <h3>PMD Live City Weather</h3>
-              <div className="pmd-city-grid">
-                {pmdLiveSnapshot.cities.map((cityWeather) => (
-                  <article key={cityWeather.city} className="pmd-city-card">
-                    <strong>{cityWeather.city}</strong>
-                    <span>{cityWeather.temperatureC}°C</span>
-                  </article>
-                ))}
-              </div>
+              {pmdLiveSnapshot.cities.length > 0 ? (
+                <div className="pmd-city-grid">
+                  {pmdLiveSnapshot.cities.map((cityWeather) => (
+                    <article key={cityWeather.city} className="pmd-city-card">
+                      <strong>{cityWeather.city}</strong>
+                      <span>{cityWeather.temperatureC}°C</span>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>Live city temperatures are temporarily unavailable from PMD. Satellite/radar links remain live.</p>
+              )}
               <p className="pmd-live-meta">Updated: {new Date(pmdLiveSnapshot.updatedAt).toLocaleString()}</p>
 
               <div className="pmd-media-grid">
