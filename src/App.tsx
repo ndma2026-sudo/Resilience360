@@ -1093,6 +1093,8 @@ function App() {
         bestPracticeName: selectedBestPracticeName,
       })
 
+      setConstructionGuidance(guidance)
+
       setIsGeneratingStepImages(true)
 
       try {
@@ -1108,9 +1110,9 @@ function App() {
         if (imageResult.images.length < guidance.steps.length) {
           throw new Error('AI image generation returned incomplete step visuals. Please try again.')
         }
-
-        setConstructionGuidance(guidance)
         setGuidanceStepImages(imageResult.images)
+      } catch (error) {
+        setGuidanceError(error instanceof Error ? error.message : 'Step image generation failed.')
       } finally {
         setIsGeneratingStepImages(false)
       }

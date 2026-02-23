@@ -46,6 +46,35 @@ const mapGuidanceSteps = (value) =>
     .filter((step) => step.title && step.description)
     .slice(0, 5)
 
+const translateGuidanceToUrdu = async (openaiClient, modelName, guidance) => {
+  const translationCompletion = await openaiClient.chat.completions.create({
+    model: modelName,
+    temperature: 0,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a professional Urdu technical translator for civil engineering guidance in Pakistan. Translate faithfully and preserve exact meaning, order, and step structure. Return strict JSON only.',
+      },
+      {
+        role: 'user',
+        content:
+          `Translate this English construction guidance to Urdu script (not roman Urdu) while keeping the same structure and counts. Return strict JSON schema:\n{\n  "summaryUrdu": string,\n  "materialsUrdu": string[],\n  "safetyUrdu": string[],\n  "stepsUrdu": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Guidance JSON:\n${JSON.stringify(guidance)}`,
+      },
+    ],
+  })
+
+  const translationText = translationCompletion.choices[0]?.message?.content ?? ''
+  const parsedTranslation = extractJson(translationText)
+
+  return {
+    summaryUrdu: String(parsedTranslation.summaryUrdu ?? ''),
+    materialsUrdu: safeArray(parsedTranslation.materialsUrdu).map((item) => String(item)),
+    safetyUrdu: safeArray(parsedTranslation.safetyUrdu).map((item) => String(item)),
+    stepsUrdu: mapGuidanceSteps(parsedTranslation.stepsUrdu),
+  }
+}
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true, hasVisionKey: hasKey, model })
 })
@@ -172,12 +201,12 @@ app.post('/api/guidance/construction', async (req, res) => {
         {
           role: 'system',
           content:
-            'You are a senior disaster-resilient construction engineer for Pakistan. Return strict JSON only with comprehensive, location-wise, implementation-ready engineering guidance in both English and Urdu.',
+            'You are a senior disaster-resilient construction engineer for Pakistan. Return strict JSON only with comprehensive, location-wise, implementation-ready engineering guidance in English.',
         },
         {
           role: 'user',
           content:
-            `Create comprehensive location-aware construction guidance for structureType=${structureType} in city=${city}, province=${province}, Pakistan for hazard=${hazard}. Best practice to apply: ${bestPracticeName}. Use deep technical reasoning: local hazard patterns, soil/drainage implications, execution sequencing, QA/QC, and practical field constraints. Return strict JSON schema:\n{\n  "summary": string,\n  "summaryUrdu": string,\n  "materials": string[],\n  "materialsUrdu": string[],\n  "safety": string[],\n  "safetyUrdu": string[],\n  "steps": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ],\n  "stepsUrdu": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Constraints: exactly 5 steps in English and exactly 5 steps in Urdu; each step must be distinct and actionable; each description must explicitly include location-wise relevance and implementation guidance for Pakistan. Urdu content must be natural, professional Urdu script (not roman Urdu).`,
+            `Create comprehensive location-aware construction guidance for structureType=${structureType} in city=${city}, province=${province}, Pakistan for hazard=${hazard}. Best practice to apply: ${bestPracticeName}. Use deep technical reasoning: local hazard patterns, soil/drainage implications, execution sequencing, QA/QC, and practical field constraints. Return strict JSON schema:\n{\n  "summary": string,\n  "materials": string[],\n  "safety": string[],\n  "steps": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Constraints: exactly 5 steps; each step must be distinct and actionable; each description must explicitly include location-wise relevance and implementation guidance for Pakistan.`,
         },
       ],
     })
@@ -186,23 +215,22 @@ app.post('/api/guidance/construction', async (req, res) => {
     const parsed = extractJson(text)
 
     const steps = mapGuidanceSteps(parsed.steps)
-    const stepsUrdu = mapGuidanceSteps(parsed.stepsUrdu)
+
+    const englishGuidance = {
+      summary: String(parsed.summary ?? ''),
+      materials: safeArray(parsed.materials).map((item) => String(item)),
+      safety: safeArray(parsed.safety).map((item) => String(item)),
+      steps,
+    }
+
+    const translated = await translateGuidanceToUrdu(openai, model, englishGuidance)
 
     res.json({
-      summary: String(parsed.summary ?? ''),
-      summaryUrdu: String(parsed.summaryUrdu ?? parsed.summary ?? ''),
-      materials: safeArray(parsed.materials).map((item) => String(item)),
-      materialsUrdu:
-        safeArray(parsed.materialsUrdu).map((item) => String(item)).length > 0
-          ? safeArray(parsed.materialsUrdu).map((item) => String(item))
-          : safeArray(parsed.materials).map((item) => String(item)),
-      safety: safeArray(parsed.safety).map((item) => String(item)),
-      safetyUrdu:
-        safeArray(parsed.safetyUrdu).map((item) => String(item)).length > 0
-          ? safeArray(parsed.safetyUrdu).map((item) => String(item))
-          : safeArray(parsed.safety).map((item) => String(item)),
-      steps,
-      stepsUrdu: stepsUrdu.length > 0 ? stepsUrdu : steps,
+      ...englishGuidance,
+      summaryUrdu: translated.summaryUrdu || englishGuidance.summary,
+      materialsUrdu: translated.materialsUrdu.length > 0 ? translated.materialsUrdu : englishGuidance.materials,
+      safetyUrdu: translated.safetyUrdu.length > 0 ? translated.safetyUrdu : englishGuidance.safety,
+      stepsUrdu: translated.stepsUrdu.length > 0 ? translated.stepsUrdu : englishGuidance.steps,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Construction guidance generation failed.'
@@ -228,12 +256,12 @@ app.post('/api/guidance/step-images', async (req, res) => {
       const prompt = `Photorealistic construction scene in ${city}, ${province}, Pakistan for ${structureType}. Hazard: ${hazard}. Best practice: ${bestPracticeName}. Step: ${stepTitle}. Show realistic workers, tools, materials, site details, and hazard-specific safeguards. ${stepDescription}`
 
       let lastError = null
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
           const generated = await openai.images.generate({
             model: 'gpt-image-1',
             prompt,
-            size: '1024x1024',
+            size: '768x768',
           })
 
           const b64 = generated.data?.[0]?.b64_json
@@ -255,13 +283,13 @@ app.post('/api/guidance/step-images', async (req, res) => {
       throw (lastError instanceof Error ? lastError : new Error(`Image generation failed for step: ${stepTitle}`))
     }
 
-    const images = []
-    for (const step of steps) {
+    const imageTasks = steps.map(async (step) => {
       const stepTitle = String(step?.title ?? 'Construction Step')
       const stepDescription = String(step?.description ?? '')
-      const generatedImage = await generateStepImage(stepTitle, stepDescription)
-      images.push(generatedImage)
-    }
+      return generateStepImage(stepTitle, stepDescription)
+    })
+
+    const images = await Promise.all(imageTasks)
 
     res.json({ images })
   } catch (error) {
