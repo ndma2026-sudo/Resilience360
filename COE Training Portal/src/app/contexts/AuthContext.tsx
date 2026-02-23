@@ -146,6 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      const normalizedProvidedCnic = String(password ?? "").replace(/-/g, "").trim();
+      const normalizedStoredCnic = String(rows[0]?.cnic ?? "").replace(/-/g, "").trim();
+
+      if (!normalizedProvidedCnic || normalizedProvidedCnic !== normalizedStoredCnic) {
+        return false;
+      }
+
       const trainee = mapTraineeFromDb(rows[0]);
       persistSessionUser(trainee);
       return true;

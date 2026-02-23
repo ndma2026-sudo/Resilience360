@@ -892,75 +892,65 @@ async function handleSignup() {
     }
 
     const supabaseClient = getSupabaseClient();
-    if (supabaseClient) {
-        try {
-            const { data: existingByUsername, error: usernameError } = await supabaseClient
-                .from('portal_profiles')
-                .select('id')
-                .eq('username', username)
-                .limit(1)
-                .maybeSingle();
-
-            if (usernameError) {
-                throw new Error(usernameError.message);
-            }
-
-            if (existingByUsername) {
-                alert("Username already exists. Please choose a different username.");
-                return;
-            }
-
-            const { data: existingByEmail, error: emailError } = await supabaseClient
-                .from('portal_profiles')
-                .select('id')
-                .eq('email', email)
-                .limit(1)
-                .maybeSingle();
-
-            if (emailError) {
-                throw new Error(emailError.message);
-            }
-
-            if (existingByEmail) {
-                alert("Email already exists. Please use a different email.");
-                return;
-            }
-
-            const { error: insertError } = await supabaseClient
-                .from('portal_profiles')
-                .insert({
-                    role,
-                    username,
-                    name,
-                    email,
-                    cnic,
-                    pec: newUser.pec || null,
-                    password
-                });
-
-            if (insertError) {
-                alert(`Signup failed: ${insertError.message}`);
-                return;
-            }
-
-            showSection('login');
-            return;
-        } catch (error) {
-            alert(`Cloud signup error: ${String(error?.message || error)}`);
-            return;
-        }
-    }
-
-    // Local fallback (works on current device only)
-    if (users.find(u => u.username === username)) {
-        alert("Username already exists. Please choose a different username.");
+    if (!supabaseClient) {
+        alert("Cloud authentication is unavailable. Please try again shortly.");
         return;
     }
 
-    users.push(newUser);
-    localStorage.setItem("users", JSON.stringify(users));
-    
-    showSection('login');
+    try {
+        const { data: existingByUsername, error: usernameError } = await supabaseClient
+            .from('portal_profiles')
+            .select('id')
+            .eq('username', username)
+            .limit(1)
+            .maybeSingle();
+
+        if (usernameError) {
+            throw new Error(usernameError.message);
+        }
+
+        if (existingByUsername) {
+            alert("Username already exists. Please choose a different username.");
+            return;
+        }
+
+        const { data: existingByEmail, error: emailError } = await supabaseClient
+            .from('portal_profiles')
+            .select('id')
+            .eq('email', email)
+            .limit(1)
+            .maybeSingle();
+
+        if (emailError) {
+            throw new Error(emailError.message);
+        }
+
+        if (existingByEmail) {
+            alert("Email already exists. Please use a different email.");
+            return;
+        }
+
+        const { error: insertError } = await supabaseClient
+            .from('portal_profiles')
+            .insert({
+                role,
+                username,
+                name,
+                email,
+                cnic,
+                pec: newUser.pec || null,
+                password
+            });
+
+        if (insertError) {
+            alert(`Signup failed: ${insertError.message}`);
+            return;
+        }
+
+        showSection('login');
+    } catch (error) {
+        alert(`Cloud signup error: ${String(error?.message || error)}`);
+    }
 }
 
 async function handleLogin() {
@@ -979,44 +969,31 @@ async function handleLogin() {
     }
 
     const supabaseClient = getSupabaseClient();
-    if (supabaseClient) {
-        try {
-            const profile = await findProfileByUsernameOrEmail(supabaseClient, username, role);
-            if (!profile) {
-                alert("User not found with this role/username.");
-                return;
-            }
-
-            if (String(profile.password || '') !== password) {
-                alert("Invalid credentials. Please check your username, password, and role.");
-                return;
-            }
-
-            currentUser = { role: profile.role, username: profile.username, name: profile.name };
-            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-            document.getElementById("userInfo").innerText = `Logged in as: ${currentUser.role}`;
-            updateNavButtons();
-            window.location.href = 'library.html';
-            return;
-        } catch (error) {
-            alert(`Cloud login error: ${String(error?.message || error)}`);
-            return;
-        }
+    if (!supabaseClient) {
+        alert("Cloud authentication is unavailable. Please try again shortly.");
+        return;
     }
 
-    // Local fallback (current device only)
-    let user = users.find(u => u.username === username && u.password === password && u.role === role);
+    try {
+        const profile = await findProfileByUsernameOrEmail(supabaseClient, username, role);
+        if (!profile) {
+            alert("User not found with this role/username.");
+            return;
+        }
 
-    if (user) {
-        currentUser = { role: user.role, username: user.username, name: user.name };
+        if (String(profile.password || '') !== password) {
+            alert("Invalid credentials. Please check your username, password, and role.");
+            return;
+        }
+
+        currentUser = { role: profile.role, username: profile.username, name: profile.name };
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         document.getElementById("userInfo").innerText = `Logged in as: ${currentUser.role}`;
         updateNavButtons();
         window.location.href = 'library.html';
-        return;
+    } catch (error) {
+        alert(`Cloud login error: ${String(error?.message || error)}`);
     }
-
-    alert("Invalid credentials. Please check your username, password, and role.");
 }
 
 function getRecoveryEmailConfig() {

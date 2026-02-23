@@ -5,7 +5,22 @@ import 'leaflet/dist/leaflet.css'
 import './index.css'
 import App from './App.tsx'
 
-registerSW({ immediate: true })
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    updateSW(true)
+  },
+})
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (sessionStorage.getItem('r360_sw_reloaded') === '1') {
+      return
+    }
+    sessionStorage.setItem('r360_sw_reloaded', '1')
+    window.location.reload()
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

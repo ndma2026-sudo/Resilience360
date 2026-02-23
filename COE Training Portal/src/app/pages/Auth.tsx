@@ -29,6 +29,7 @@ export function Auth() {
 
   // Trainee login state
   const [traineeLoginEmail, setTraineeLoginEmail] = useState("");
+  const [traineeLoginCnic, setTraineeLoginCnic] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -97,14 +98,24 @@ export function Auth() {
       return;
     }
 
-    const success = await login(traineeLoginEmail);
+    if (!traineeLoginCnic) {
+      setErrors({ traineeLoginCnic: "CNIC is required" });
+      return;
+    }
+
+    if (!/^\d{13}$/.test(traineeLoginCnic.replace(/-/g, ""))) {
+      setErrors({ traineeLoginCnic: "CNIC must be 13 digits (e.g., 12345-1234567-1)" });
+      return;
+    }
+
+    const success = await login(traineeLoginEmail, traineeLoginCnic);
     
     if (success) {
       toast.success("Welcome back!");
       navigate("/");
     } else {
-      toast.error("Account not found. Please sign up first.");
-      setErrors({ traineeLoginEmail: "Account not found" });
+      toast.error("Invalid credentials. Please check email and CNIC.");
+      setErrors({ traineeLoginEmail: "Invalid credentials" });
     }
   };
 
@@ -302,6 +313,25 @@ export function Auth() {
                       <p className="text-xs text-red-600 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {errors.traineeLoginEmail}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="trainee-login-cnic">CNIC</Label>
+                    <Input
+                      id="trainee-login-cnic"
+                      placeholder="12345-1234567-1"
+                      value={traineeLoginCnic}
+                      onChange={(e) => {
+                        setTraineeLoginCnic(e.target.value);
+                        setErrors(prev => ({ ...prev, traineeLoginCnic: "" }));
+                      }}
+                    />
+                    {errors.traineeLoginCnic && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {errors.traineeLoginCnic}
                       </p>
                     )}
                   </div>
