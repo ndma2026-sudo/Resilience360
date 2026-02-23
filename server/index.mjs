@@ -25,6 +25,14 @@ const GLOBAL_EARTHQUAKE_FEED_URL =
 const GLOBAL_EARTHQUAKE_FEED_URL_BACKUP =
   process.env.GLOBAL_EARTHQUAKE_FEED_URL_BACKUP ??
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson'
+const RECOVERY_EMAIL_PROVIDER = String(process.env.RECOVERY_EMAIL_PROVIDER ?? '').trim().toLowerCase()
+const RECOVERY_FROM_EMAIL = String(process.env.RECOVERY_FROM_EMAIL ?? '').trim()
+const RECOVERY_FROM_NAME = String(process.env.RECOVERY_FROM_NAME ?? 'Resilience360 Recovery').trim()
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY ?? '').trim()
+const BREVO_API_KEY = String(process.env.BREVO_API_KEY ?? '').trim()
+const RECOVERY_RATE_LIMIT_WINDOW_MS = Math.max(60_000, Number(process.env.RECOVERY_RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000) || 15 * 60 * 1000)
+const RECOVERY_RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number(process.env.RECOVERY_RATE_LIMIT_MAX_REQUESTS ?? 6) || 6)
+const recoveryRateLimitStore = new Map()
 
 const openai = hasKey ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 
@@ -69,6 +77,183 @@ const fetchRemoteJson = async (url, timeoutMs = 14000) => {
 }
 
 const normalizeWhitespace = (value) => value.replace(/\s+/g, ' ').trim()
+const clip = (value, max = 400) => String(value ?? '').slice(0, max)
+const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase()
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const pruneRecoveryRateLimitStore = (now) => {
+  for (const [key, entry] of recoveryRateLimitStore.entries()) {
+    if (!entry || now - entry.windowStart > RECOVERY_RATE_LIMIT_WINDOW_MS) {
+      recoveryRateLimitStore.delete(key)
+    }
+  }
+}
+
+const checkRecoveryRateLimit = (clientKey) => {
+  const now = Date.now()
+  pruneRecoveryRateLimitStore(now)
+  const current = recoveryRateLimitStore.get(clientKey)
+
+  if (!current || now - current.windowStart > RECOVERY_RATE_LIMIT_WINDOW_MS) {
+    recoveryRateLimitStore.set(clientKey, { windowStart: now, count: 1 })
+    return { allowed: true }
+  }
+
+  if (current.count >= RECOVERY_RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterSeconds = Math.ceil((RECOVERY_RATE_LIMIT_WINDOW_MS - (now - current.windowStart)) / 1000)
+    return { allowed: false, retryAfterSeconds }
+  }
+
+  current.count += 1
+  recoveryRateLimitStore.set(clientKey, current)
+  return { allowed: true }
+}
+
+const buildRecoveryEmailContent = ({ portal, fullName, role, username, credential, credentialLabel }) => {
+  const safePortal = clip(portal || 'Resilience360 Portal', 80)
+  const safeName = clip(fullName || 'User', 120)
+  const safeRole = clip(role || 'User', 60)
+  const safeUsername = clip(username || '', 160)
+  const safeCredential = clip(credential || '', 160)
+  const safeCredentialLabel = clip(credentialLabel || 'Credential', 40)
+
+  const subject = `${safePortal} - Credential Recovery`
+  const text =
+    `Assalam-o-Alaikum,\n\n` +
+    `Your ${safePortal} credentials are:\n` +
+    `Role: ${safeRole}\n` +
+    `Username/Email: ${safeUsername}\n` +
+    `${safeCredentialLabel}: ${safeCredential}\n\n` +
+    `If you did not request this, please contact support immediately.\n` +
+    `${RECOVERY_FROM_NAME}`
+
+  const html =
+    `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937">` +
+    `<p>Assalam-o-Alaikum ${escapeHtml(safeName)},</p>` +
+    `<p>Your <strong>${escapeHtml(safePortal)}</strong> credentials are:</p>` +
+    `<ul>` +
+    `<li><strong>Role:</strong> ${escapeHtml(safeRole)}</li>` +
+    `<li><strong>Username/Email:</strong> ${escapeHtml(safeUsername)}</li>` +
+    `<li><strong>${escapeHtml(safeCredentialLabel)}:</strong> ${escapeHtml(safeCredential)}</li>` +
+    `</ul>` +
+    `<p>If you did not request this, please contact support immediately.</p>` +
+    `<p>${escapeHtml(RECOVERY_FROM_NAME)}</p>` +
+    `</div>`
+
+  return { subject, text, html }
+}
+
+const sendViaResend = async ({ toEmail, toName, subject, text, html }) => {
+  if (!RESEND_API_KEY) {
+    return { ok: false, reason: 'resend-key-missing' }
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: RECOVERY_FROM_EMAIL,
+      to: [toEmail],
+      subject,
+      text,
+      html,
+      reply_to: RECOVERY_FROM_EMAIL,
+      tags: [
+        { name: 'portal', value: 'recovery' },
+        { name: 'recipient', value: toName || 'user' },
+      ],
+    }),
+  })
+
+  if (response.ok) {
+    return { ok: true }
+  }
+
+  const responseText = await response.text()
+  return { ok: false, reason: `resend-api-failed:${response.status}:${clip(responseText, 220)}` }
+}
+
+const sendViaBrevo = async ({ toEmail, toName, subject, text, html }) => {
+  if (!BREVO_API_KEY) {
+    return { ok: false, reason: 'brevo-key-missing' }
+  }
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': BREVO_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: {
+        name: RECOVERY_FROM_NAME,
+        email: RECOVERY_FROM_EMAIL,
+      },
+      to: [
+        {
+          email: toEmail,
+          name: toName || 'User',
+        },
+      ],
+      subject,
+      htmlContent: html,
+      textContent: text,
+      replyTo: {
+        email: RECOVERY_FROM_EMAIL,
+        name: RECOVERY_FROM_NAME,
+      },
+    }),
+  })
+
+  if (response.ok) {
+    return { ok: true }
+  }
+
+  const responseText = await response.text()
+  return { ok: false, reason: `brevo-api-failed:${response.status}:${clip(responseText, 220)}` }
+}
+
+const sendRecoveryCredentialEmail = async (payload) => {
+  if (!RECOVERY_FROM_EMAIL) {
+    return { ok: false, reason: 'missing-from-email' }
+  }
+
+  const providers = RECOVERY_EMAIL_PROVIDER
+    ? [RECOVERY_EMAIL_PROVIDER]
+    : ['resend', 'brevo']
+
+  let lastFailure = { ok: false, reason: 'no-provider-configured' }
+
+  for (const provider of providers) {
+    try {
+      if (provider === 'resend') {
+        const result = await sendViaResend(payload)
+        if (result.ok) return result
+        lastFailure = result
+        continue
+      }
+
+      if (provider === 'brevo') {
+        const result = await sendViaBrevo(payload)
+        if (result.ok) return result
+        lastFailure = result
+      }
+    } catch (error) {
+      lastFailure = { ok: false, reason: `provider-error:${provider}:${clip(error?.message || error, 220)}` }
+    }
+  }
+
+  return lastFailure
+}
 
 const parsePmdCityTemperatures = (html) => {
   const majorCities = ['ISLAMABAD', 'LAHORE', 'KARACHI', 'PESHAWAR', 'GILGIT', 'MUZAFFARABAD']
@@ -181,6 +366,74 @@ const translateGuidanceToUrdu = async (openaiClient, modelName, guidance) => {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, hasVisionKey: hasKey, model })
+})
+
+app.post('/api/recovery/send-credentials', async (req, res) => {
+  const toEmail = normalizeEmail(req.body?.toEmail)
+  const fullName = clip(req.body?.fullName, 120)
+  const portal = clip(req.body?.portal, 80)
+  const role = clip(req.body?.role, 60)
+  const username = clip(req.body?.username, 160)
+  const credential = clip(req.body?.credential, 160)
+  const credentialLabel = clip(req.body?.credentialLabel || 'Credential', 40)
+
+  if (!toEmail || !portal || !username || !credential) {
+    res.status(400).json({
+      ok: false,
+      reason: 'invalid-request',
+      message: 'toEmail, portal, username, and credential are required.',
+    })
+    return
+  }
+
+  const rateLimitKey = `${String(req.ip ?? 'unknown-ip')}|${toEmail}`
+  const limiter = checkRecoveryRateLimit(rateLimitKey)
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(limiter.retryAfterSeconds ?? 60))
+    res.status(429).json({
+      ok: false,
+      reason: 'rate-limited',
+      message: 'Too many recovery requests. Please retry shortly.',
+    })
+    return
+  }
+
+  try {
+    const { subject, text, html } = buildRecoveryEmailContent({
+      portal,
+      fullName,
+      role,
+      username,
+      credential,
+      credentialLabel,
+    })
+
+    const sendResult = await sendRecoveryCredentialEmail({
+      toEmail,
+      toName: fullName,
+      subject,
+      text,
+      html,
+    })
+
+    if (!sendResult.ok) {
+      const reason = String(sendResult.reason ?? '')
+      const isMissingConfig =
+        reason.includes('missing') || reason.includes('no-provider-configured') || reason.includes('key-missing')
+
+      res.status(isMissingConfig ? 503 : 502).json({
+        ok: false,
+        reason: isMissingConfig ? 'backend-missing-config' : 'provider-send-failed',
+        details: reason,
+      })
+      return
+    }
+
+    res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Recovery email send failed.'
+    res.status(500).json({ ok: false, reason: 'server-error', details: message })
+  }
 })
 
 app.get('/api/pmd/rss', async (_req, res) => {

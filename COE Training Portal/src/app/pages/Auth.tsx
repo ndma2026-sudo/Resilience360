@@ -156,6 +156,18 @@ export function Auth() {
       return;
     }
 
+    if (String(result.reason || "").includes("backend-missing-config")) {
+      toast.error("Backend recovery email provider is not configured yet.");
+      setErrors((prev) => ({ ...prev, recoveryEmail: "Backend recovery provider not configured" }));
+      return;
+    }
+
+    if (String(result.reason || "").toLowerCase().includes("invalid grant")) {
+      toast.error("Recovery provider authentication expired. Please reconnect provider settings.");
+      setErrors((prev) => ({ ...prev, recoveryEmail: "Recovery provider auth expired" }));
+      return;
+    }
+
     toast.error("Recovery failed. Please check your registered email.");
     setErrors((prev) => ({ ...prev, recoveryEmail: "Recovery failed" }));
   };

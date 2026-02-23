@@ -25,6 +25,17 @@ Set these in Render -> Environment:
 - Any additional vars from .env.example used by backend
 - PORT is managed by Render automatically
 
+For portal credential recovery email (PGBC + COE), add:
+- RECOVERY_FROM_EMAIL=<verified sender email>
+- RECOVERY_FROM_NAME=Resilience360 Recovery
+- RECOVERY_EMAIL_PROVIDER=resend (or brevo)
+- RESEND_API_KEY=<required if provider is resend>
+- BREVO_API_KEY=<required if provider is brevo>
+
+Notes:
+- At least one provider key must be configured.
+- This backend mail path avoids browser-side EmailJS provider token expiry issues.
+
 ### 4) Auto-deploy
 - Enable Auto-Deploy = On
 - Every push to main triggers a new backend deployment automatically
@@ -32,6 +43,7 @@ Set these in Render -> Environment:
 ### 5) Verify
 - Open: https://<your-render-service>/health
 - Should return healthy response before wiring frontend calls
+- Test recovery API with POST https://<your-render-service>/api/recovery/send-credentials
 
 ## Option B: Railway
 

@@ -9,6 +9,8 @@ const DEFAULT_RECOVERY_EMAILJS_CONFIG = {
     fromName: 'Pakistan Green Building Codes Portal'
 };
 
+const RECOVERY_BACKEND_PROD_BASE = 'https://resilience360-backend.onrender.com';
+
 const SUPABASE_URL = 'https://glbhizmhrwqomcrxsflb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsYmhpem1ocndxb21jcnhzZmxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0MzI1ODQsImV4cCI6MjA4NzAwODU4NH0.ZyswE5tt3lFaXgfKDABI25q8u3RNBKGKWJBAilQqvvY';
 const SUPABASE_REST_HEADERS = {
@@ -61,7 +63,67 @@ function getMissingRecoveryConfigFields(config) {
     return missing;
 }
 
+function getRecoveryBackendTargets() {
+    const path = '/api/recovery/send-credentials';
+    const hostname = String(window.location.hostname || '').toLowerCase();
+    const targets = [];
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        targets.push(`http://localhost:8787${path}`);
+    }
+
+    if (hostname.endsWith('github.io')) {
+        targets.push(`${RECOVERY_BACKEND_PROD_BASE}${path}`);
+    }
+
+    targets.push(path);
+    return [...new Set(targets)];
+}
+
+async function sendRecoveryEmailViaBackend(user) {
+    const requestBody = {
+        portal: 'Pakistan Green Building Codes Portal',
+        fullName: user.name || user.username || 'User',
+        role: user.role || 'User',
+        toEmail: user.email,
+        username: user.username || user.email,
+        credential: user.password,
+        credentialLabel: 'Password'
+    };
+
+    let lastFailure = { ok: false, reason: 'backend-unavailable' };
+
+    for (const target of getRecoveryBackendTargets()) {
+        try {
+            const response = await fetch(target, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (response.ok) {
+                return { ok: true };
+            }
+
+            const responseText = await response.text();
+            const statusPrefix = response.status === 503 ? 'backend-missing-config' : `backend-failed:${response.status}`;
+            lastFailure = { ok: false, reason: statusPrefix, details: responseText };
+        } catch (error) {
+            lastFailure = { ok: false, reason: 'backend-network-error', details: String(error?.message || error) };
+        }
+    }
+
+    return lastFailure;
+}
+
 async function sendRecoveryEmailViaApi(user) {
+    const backendResult = await sendRecoveryEmailViaBackend(user);
+    if (backendResult.ok) {
+        return backendResult;
+    }
+
     const config = getRecoveryEmailConfig();
     const missing = getMissingRecoveryConfigFields(config);
 
@@ -130,9 +192,19 @@ async function sendRecoveryEmailViaApi(user) {
             return fallback;
         }
 
-        return fallback;
+        return {
+            ...fallback,
+            backendReason: backendResult.reason,
+            backendDetails: backendResult.details
+        };
     } catch (error) {
-        return { ok: false, reason: "network-error", details: String(error?.message || error) };
+        return {
+            ok: false,
+            reason: "network-error",
+            details: String(error?.message || error),
+            backendReason: backendResult.reason,
+            backendDetails: backendResult.details
+        };
     }
 }
 
@@ -1141,6 +1213,11 @@ async function handleForgotCredentials() {
         if (sendResult.reason === "missing-config") {
             const missingFieldsText = (sendResult.missing || []).join(", ");
             alert(`Recovery email service is not configured. Missing: ${missingFieldsText}. A fallback email draft has been opened.`);
+            return;
+        }
+
+        if (String(sendResult.reason || '').startsWith('backend-missing-config')) {
+            alert('Backend recovery email provider is not configured yet. A fallback email draft has been opened. Please set backend mail provider env variables.');
             return;
         }
 
