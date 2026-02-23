@@ -36,6 +36,15 @@ const extractJson = (rawText) => {
 }
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
+const mapGuidanceSteps = (value) =>
+  safeArray(value)
+    .map((step) => ({
+      title: String(step?.title ?? ''),
+      description: String(step?.description ?? ''),
+      keyChecks: safeArray(step?.keyChecks).map((item) => String(item)),
+    }))
+    .filter((step) => step.title && step.description)
+    .slice(0, 5)
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, hasVisionKey: hasKey, model })
@@ -163,12 +172,12 @@ app.post('/api/guidance/construction', async (req, res) => {
         {
           role: 'system',
           content:
-            'You are a senior disaster-resilient construction engineer for Pakistan. Return strict JSON only with comprehensive, location-wise, implementation-ready engineering guidance.',
+            'You are a senior disaster-resilient construction engineer for Pakistan. Return strict JSON only with comprehensive, location-wise, implementation-ready engineering guidance in both English and Urdu.',
         },
         {
           role: 'user',
           content:
-            `Create comprehensive location-aware construction guidance for structureType=${structureType} in city=${city}, province=${province}, Pakistan for hazard=${hazard}. Best practice to apply: ${bestPracticeName}. Use deep technical reasoning: local hazard patterns, soil/drainage implications, execution sequencing, QA/QC, and practical field constraints. Return strict JSON schema:\n{\n  "summary": string,\n  "materials": string[],\n  "safety": string[],\n  "steps": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Constraints: exactly 5 steps; each step must be distinct and actionable; each description must explicitly include location-wise relevance and implementation guidance for Pakistan.`,
+            `Create comprehensive location-aware construction guidance for structureType=${structureType} in city=${city}, province=${province}, Pakistan for hazard=${hazard}. Best practice to apply: ${bestPracticeName}. Use deep technical reasoning: local hazard patterns, soil/drainage implications, execution sequencing, QA/QC, and practical field constraints. Return strict JSON schema:\n{\n  "summary": string,\n  "summaryUrdu": string,\n  "materials": string[],\n  "materialsUrdu": string[],\n  "safety": string[],\n  "safetyUrdu": string[],\n  "steps": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ],\n  "stepsUrdu": [\n    {\n      "title": string,\n      "description": string,\n      "keyChecks": string[]\n    }\n  ]\n}. Constraints: exactly 5 steps in English and exactly 5 steps in Urdu; each step must be distinct and actionable; each description must explicitly include location-wise relevance and implementation guidance for Pakistan. Urdu content must be natural, professional Urdu script (not roman Urdu).`,
         },
       ],
     })
@@ -176,18 +185,24 @@ app.post('/api/guidance/construction', async (req, res) => {
     const text = completion.choices[0]?.message?.content ?? ''
     const parsed = extractJson(text)
 
+    const steps = mapGuidanceSteps(parsed.steps)
+    const stepsUrdu = mapGuidanceSteps(parsed.stepsUrdu)
+
     res.json({
       summary: String(parsed.summary ?? ''),
+      summaryUrdu: String(parsed.summaryUrdu ?? parsed.summary ?? ''),
       materials: safeArray(parsed.materials).map((item) => String(item)),
+      materialsUrdu:
+        safeArray(parsed.materialsUrdu).map((item) => String(item)).length > 0
+          ? safeArray(parsed.materialsUrdu).map((item) => String(item))
+          : safeArray(parsed.materials).map((item) => String(item)),
       safety: safeArray(parsed.safety).map((item) => String(item)),
-      steps: safeArray(parsed.steps)
-        .map((step) => ({
-          title: String(step?.title ?? ''),
-          description: String(step?.description ?? ''),
-          keyChecks: safeArray(step?.keyChecks).map((item) => String(item)),
-        }))
-        .filter((step) => step.title && step.description)
-        .slice(0, 5),
+      safetyUrdu:
+        safeArray(parsed.safetyUrdu).map((item) => String(item)).length > 0
+          ? safeArray(parsed.safetyUrdu).map((item) => String(item))
+          : safeArray(parsed.safety).map((item) => String(item)),
+      steps,
+      stepsUrdu: stepsUrdu.length > 0 ? stepsUrdu : steps,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Construction guidance generation failed.'

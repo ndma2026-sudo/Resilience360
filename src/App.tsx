@@ -1196,7 +1196,13 @@ function App() {
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(24, 66, 105)
       doc.setFontSize(13)
-      doc.text(continued ? 'Resilience360 Construction Guidance (Continued)' : 'Resilience360 Construction Guidance Report', margin + 3, 19)
+      doc.text(
+        continued
+          ? 'Resilience360 Construction Guidance in English + Urdu (Continued)'
+          : 'Resilience360 Construction Guidance in English + Urdu Report',
+        margin + 3,
+        19,
+      )
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(46, 71, 93)
@@ -1332,12 +1338,20 @@ function App() {
       `Structure Type: ${structureType}`,
     ])
 
-    drawSection('Executive Summary', [constructionGuidance.summary])
-    drawSection('Recommended Materials', constructionGuidance.materials.map((item) => `- ${item}`))
-    drawSection('Safety Requirements', constructionGuidance.safety.map((item) => `- ${item}`))
+    drawSection('Executive Summary (English)', [constructionGuidance.summary])
+    drawSection('خلاصہ (اردو)', [constructionGuidance.summaryUrdu])
+    drawSection('Recommended Materials (English)', constructionGuidance.materials.map((item) => `- ${item}`))
+    drawSection('تجویز کردہ مواد (اردو)', constructionGuidance.materialsUrdu.map((item) => `- ${item}`))
+    drawSection('Safety Requirements (English)', constructionGuidance.safety.map((item) => `- ${item}`))
+    drawSection('حفاظتی ہدایات (اردو)', constructionGuidance.safetyUrdu.map((item) => `- ${item}`))
 
     for (const [index, step] of constructionGuidance.steps.entries()) {
       const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
+      drawStep(step, index, image?.imageDataUrl, preloadedImgs[index])
+    }
+
+    for (const [index, step] of constructionGuidance.stepsUrdu.entries()) {
+      const image = guidanceStepImages[index]
       drawStep(step, index, image?.imageDataUrl, preloadedImgs[index])
     }
 
@@ -3618,14 +3632,14 @@ function App() {
               </div>
 
               <button onClick={() => { void generateApplyAreaGuidance() }} disabled={isGeneratingGuidance}>
-                {isGeneratingGuidance ? '⚡ Generating Construction Guidance + Images...' : '🛠️ Construction Guidance'}
+                {isGeneratingGuidance ? '⚡ Generating Construction Guidance in English + Images...' : '🛠️ Construction Guidance in English'}
               </button>
 
               {guidanceError && <p>{guidanceError}</p>}
 
               {constructionGuidance && (
                 <div className="retrofit-model-output">
-                  <h3>Location-Tailored Construction Guidance — {applyBestPracticeTitle}</h3>
+                  <h3>Location-Tailored Construction Guidance in English — {applyBestPracticeTitle}</h3>
                   <p>
                     <strong>Area:</strong> {applyCity}, {applyProvince} | <strong>Hazard:</strong> {applyHazard}
                   </p>
@@ -3653,6 +3667,45 @@ function App() {
                         <article key={`${step.title}-${index}`} className="retrofit-defect-card">
                           <h4>
                             Step {index + 1}: {step.title}
+                          </h4>
+                          <p>{step.description}</p>
+                          {image?.imageDataUrl && (
+                            <img src={image.imageDataUrl} alt={`${step.title} visual guide`} className="retrofit-preview" />
+                          )}
+                          <ul>
+                            {step.keyChecks.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </article>
+                      )
+                    })}
+                  </div>
+                  <h3>تعمیراتی رہنمائی (اردو)</h3>
+                  <p>{constructionGuidance.summaryUrdu}</p>
+
+                  <h3>تجویز کردہ مواد</h3>
+                  <ul>
+                    {constructionGuidance.materialsUrdu.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+
+                  <h3>حفاظتی ہدایات</h3>
+                  <ul>
+                    {constructionGuidance.safetyUrdu.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+
+                  <h3>عمل درآمد کے مراحل</h3>
+                  <div className="retrofit-defect-list">
+                    {constructionGuidance.stepsUrdu.map((step, index) => {
+                      const image = guidanceStepImages[index]
+                      return (
+                        <article key={`${step.title}-${index}-urdu`} className="retrofit-defect-card">
+                          <h4>
+                            مرحلہ {index + 1}: {step.title}
                           </h4>
                           <p>{step.description}</p>
                           {image?.imageDataUrl && (

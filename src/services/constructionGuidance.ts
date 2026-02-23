@@ -8,9 +8,13 @@ export type GuidanceStep = {
 
 export type ConstructionGuidanceResult = {
   summary: string
+  summaryUrdu: string
   materials: string[]
+  materialsUrdu: string[]
   safety: string[]
+  safetyUrdu: string[]
   steps: GuidanceStep[]
+  stepsUrdu: GuidanceStep[]
 }
 
 export type GuidanceStepImage = {
