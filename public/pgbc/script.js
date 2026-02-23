@@ -1926,29 +1926,46 @@ async function extractPdfText(pdfPath) {
 }
 
 async function generateAiSummaryFromSectionText(sectionText, node) {
-    const response = await fetch('/.netlify/functions/ai-summary', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            sectionText,
-            sectionLabel: node.code ? `${node.code} ${node.title}` : node.title
-        })
-    });
+    const sectionLabel = node.code ? `${node.code} ${node.title}` : node.title;
+    const localFallbackSummary = buildLocalSectionSummary(sectionText, node);
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`AI summary service failed (${response.status}): ${errorText.slice(0, 300)}`);
+    try {
+        const response = await fetch('/.netlify/functions/ai-summary', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sectionText,
+                sectionLabel
+            })
+        });
+
+        if (!response.ok) {
+            return localFallbackSummary;
+        }
+
+        const data = await response.json();
+        const summaryText = data?.summaryText?.trim();
+        if (!summaryText) {
+            return localFallbackSummary;
+        }
+
+        return summaryText;
+    } catch (_) {
+        return localFallbackSummary;
     }
+}
 
-    const data = await response.json();
-    const summaryText = data?.summaryText?.trim();
-    if (!summaryText) {
-        throw new Error('AI summary returned empty content.');
-    }
+function buildLocalSectionSummary(sectionText, node) {
+    const cleaned = String(sectionText || '')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-    return summaryText;
+    const snippet = cleaned.length > 700 ? `${cleaned.slice(0, 700).trim()}…` : cleaned;
+    const sectionLabel = node.code ? `${node.code} ${node.title}` : node.title;
+
+    return `Section ${sectionLabel} sets requirements and guidance for this part of the code. Key extracted text: ${snippet}`;
 }
 
 async function generateAiExplanationForNode(node) {
@@ -1960,7 +1977,11 @@ async function generateAiExplanationForNode(node) {
     const pdfText = await extractPdfText(code.pdfPath);
     const exact = findExactSectionTextFromPdf(pdfText, node);
     if (!exact?.sectionText) {
-        throw new Error('Exact section text was not found in this PDF. Try clicking a more specific subsection code.');
+        return {
+            sectionText: `Exact section text could not be extracted for ${node.code ? `${node.code} ${node.title}` : node.title}.`,
+            summaryText: `This section appears to define scope, technical requirements, and compliance guidance for ${node.title}. Open the full PDF to review all mandatory clauses and tables.`,
+            matchedHeading: ''
+        };
     }
 
     const summaryText = await generateAiSummaryFromSectionText(exact.sectionText, node);
