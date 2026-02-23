@@ -1138,7 +1138,7 @@ function App() {
     setApplyBestPracticeTitle(nextBestPractice)
   }
 
-  const downloadApplyGuidanceWordReport = async () => {
+  const downloadApplyGuidanceWordReport = async (reportLanguage: 'english' | 'urdu') => {
     if (!constructionGuidance) return
 
     let reportImages = guidanceStepImages
@@ -1196,39 +1196,60 @@ function App() {
       })
 
     const renderedAt = new Date().toLocaleString()
+    const isEnglishReport = reportLanguage === 'english'
+    const reportTitle = isEnglishReport
+      ? 'Resilience360 Construction Guidance in English Report'
+      : 'Resilience360 تعمیراتی رہنمائی رپورٹ (اردو)'
+    const areaLabel = isEnglishReport ? 'Area' : 'علاقہ'
+    const hazardLabel = isEnglishReport ? 'Hazard' : 'خطرہ'
+    const bestPracticeLabel = isEnglishReport ? 'Best Practice' : 'بہترین طریقہ کار'
+    const generatedLabel = isEnglishReport ? 'Generated' : 'تیار کردہ وقت'
+    const summaryHeading = isEnglishReport ? 'Executive Summary' : 'خلاصہ'
+    const materialsHeading = isEnglishReport ? 'Recommended Materials' : 'تجویز کردہ مواد'
+    const safetyHeading = isEnglishReport ? 'Safety Requirements' : 'حفاظتی ہدایات'
+    const stepLabel = isEnglishReport ? 'Step' : 'مرحلہ'
+    const keyChecksHeading = isEnglishReport ? 'Key Checks' : 'اہم جانچ نکات'
+    const stepVisualCaption = isEnglishReport ? 'Step visual' : 'مرحلے کی تصویر'
+    const reportSummary = isEnglishReport ? constructionGuidance.summary : constructionGuidance.summaryUrdu
+    const reportMaterials = isEnglishReport ? constructionGuidance.materials : constructionGuidance.materialsUrdu
+    const reportSafety = isEnglishReport ? constructionGuidance.safety : constructionGuidance.safetyUrdu
+    const reportSteps = isEnglishReport ? constructionGuidance.steps : constructionGuidance.stepsUrdu
+
     const docChildren: Paragraph[] = [
       new Paragraph({
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Resilience360 Construction Guidance in English Report', bold: true, size: 34 })],
+        children: [new TextRun({ text: reportTitle, bold: true, size: 34 })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 260 },
         children: [
           new TextRun({
-            text: `Area: ${applyCity}, ${applyProvince}   |   Hazard: ${applyHazard}   |   Best Practice: ${applyBestPracticeTitle}   |   Generated: ${renderedAt}`,
+            text: `${areaLabel}: ${applyCity}, ${applyProvince}   |   ${hazardLabel}: ${applyHazard}   |   ${bestPracticeLabel}: ${applyBestPracticeTitle}   |   ${generatedLabel}: ${renderedAt}`,
             size: 20,
           }),
         ],
       }),
-      new Paragraph({ heading: HeadingLevel.HEADING_1, text: 'Executive Summary' }),
-      new Paragraph({ text: constructionGuidance.summary, spacing: { after: 220 } }),
-      new Paragraph({ heading: HeadingLevel.HEADING_1, text: 'Recommended Materials' }),
-      ...constructionGuidance.materials.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
+      new Paragraph({ heading: HeadingLevel.HEADING_1, text: summaryHeading }),
+      new Paragraph({ text: reportSummary, spacing: { after: 220 } }),
+      new Paragraph({ heading: HeadingLevel.HEADING_1, text: materialsHeading }),
+      ...reportMaterials.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
       new Paragraph({ text: '', spacing: { after: 120 } }),
-      new Paragraph({ heading: HeadingLevel.HEADING_1, text: 'Safety Requirements' }),
-      ...constructionGuidance.safety.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
+      new Paragraph({ heading: HeadingLevel.HEADING_1, text: safetyHeading }),
+      ...reportSafety.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
       new Paragraph({ text: '', spacing: { after: 140 } }),
     ]
 
-    for (const [index, step] of constructionGuidance.steps.entries()) {
-      const image = reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
+    for (const [index, step] of reportSteps.entries()) {
+      const image = isEnglishReport
+        ? reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
+        : reportImages[index]
 
       docChildren.push(
-        new Paragraph({ heading: HeadingLevel.HEADING_2, text: `Step ${index + 1}: ${step.title}`, spacing: { before: 240, after: 80 } }),
+        new Paragraph({ heading: HeadingLevel.HEADING_2, text: `${stepLabel} ${index + 1}: ${step.title}`, spacing: { before: 240, after: 80 } }),
         new Paragraph({ text: step.description, spacing: { after: 100 } }),
-        new Paragraph({ text: 'Key Checks', heading: HeadingLevel.HEADING_3 }),
+        new Paragraph({ text: keyChecksHeading, heading: HeadingLevel.HEADING_3 }),
         ...step.keyChecks.map((item) => new Paragraph({ text: item, bullet: { level: 0 } })),
       )
 
@@ -1254,7 +1275,7 @@ function App() {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 180 },
-            children: [new TextRun({ text: `Step ${index + 1} visual`, italics: true, size: 18 })],
+            children: [new TextRun({ text: `${stepLabel} ${index + 1} ${stepVisualCaption}`, italics: true, size: 18 })],
           }),
         )
       }
@@ -1272,7 +1293,7 @@ function App() {
     const url = window.URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `resilience360-guidance-report-english-${applyProvince}-${applyCity}-${Date.now()}.docx`
+    anchor.download = `resilience360-guidance-report-${reportLanguage}-${applyProvince}-${applyCity}-${Date.now()}.docx`
     document.body.appendChild(anchor)
     anchor.click()
     document.body.removeChild(anchor)
@@ -3660,10 +3681,15 @@ function App() {
                     </>
                   )}
                   <div className="inline-controls">
-                    <button onClick={() => { void downloadApplyGuidanceWordReport() }} disabled={isGeneratingStepImages}>
+                    <button onClick={() => { void downloadApplyGuidanceWordReport('english') }} disabled={isGeneratingStepImages}>
                       {isGeneratingStepImages
                         ? '📄 Preparing AI Images for English Word Report...'
                         : '📄 Download English Guidance Report (Word)'}
+                    </button>
+                    <button onClick={() => { void downloadApplyGuidanceWordReport('urdu') }} disabled={isGeneratingStepImages}>
+                      {isGeneratingStepImages
+                        ? '📄 اردو ورڈ رپورٹ کے لیے AI تصاویر تیار کی جا رہی ہیں...'
+                        : '📄 اردو رہنمائی رپورٹ ڈاؤن لوڈ کریں (Word)'}
                     </button>
                   </div>
                   {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
