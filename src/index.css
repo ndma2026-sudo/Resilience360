@@ -461,6 +461,73 @@ img {
   border-radius: 10px;
 }
 
+.section-risk-maps {
+  padding: var(--space-3);
+}
+
+.section-risk-maps h2 {
+  margin-bottom: var(--space-2);
+}
+
+.section-risk-maps .context-split-layout {
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.section-risk-maps .context-left-panel {
+  border-radius: 8px;
+  padding: 10px;
+  background: #f7fbff;
+}
+
+.section-risk-maps .context-left-panel h3 {
+  font-size: 0.98rem;
+}
+
+.section-risk-maps .context-left-panel p,
+.section-risk-maps p,
+.section-risk-maps li {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.section-risk-maps .inline-controls {
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: var(--space-2);
+  gap: 10px;
+}
+
+.section-risk-maps .alerts {
+  margin-top: var(--space-2);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.section-risk-maps .leaflet-map {
+  height: 220px;
+  margin: var(--space-2) 0;
+  border: 1px solid #d5e5f3;
+  border-radius: 8px;
+}
+
+.section-risk-maps .retrofit-model-output {
+  margin-top: var(--space-2);
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fcff;
+}
+
+.section-risk-maps .retrofit-model-output h3 {
+  font-size: 0.98rem;
+  margin: 0 0 8px;
+}
+
+.section-risk-maps ul {
+  margin: 8px 0;
+  padding-inline-start: 20px;
+}
+
 .section-design-toolkit ul,
 .section-learn ul,
 .section-apply-region ul {
