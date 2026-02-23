@@ -1,17 +1,3 @@
-// ...existing code...
-useEffect(() => {
-  if (
-    constructionGuidance &&
-    guidanceStepImages &&
-    guidanceStepImages.length === constructionGuidance.steps.length &&
-    guidanceStepImages.every(img => img?.imageDataUrl)
-  ) {
-    setIsReportReady(true);
-  } else {
-    setIsReportReady(false);
-  }
-}, [constructionGuidance, guidanceStepImages]);
-// ...existing code...
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import RiskMap from './components/RiskMap'
@@ -911,7 +897,7 @@ function App() {
   const [houseTypeForCost, setHouseTypeForCost] = useState<'Single-Storey' | 'Double-Storey' | 'School Block' | 'Clinic Unit'>('Single-Storey')
   const [floorAreaSqftCost, setFloorAreaSqftCost] = useState(1200)
   const [designSummaryText, setDesignSummaryText] = useState<string | null>(null)
-  const [showTrainingPrograms, setShowTrainingPrograms] = useState(false)
+  const [showTrainingPrograms] = useState(false)
 
   const t = translations[language]
   const isUrdu = language === 'ur'
@@ -1140,13 +1126,19 @@ function App() {
   const downloadApplyGuidanceReport = async () => {
     if (!constructionGuidance) return
 
+    type PreloadedStepImage = {
+      base64: string
+      width: number
+      height: number
+    }
+
     // Preload and convert all step images to base64 before PDF generation
     const stepImages = constructionGuidance.steps.map((step, index) => {
       const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
       return image?.imageDataUrl || null
     })
-    const preloadAndConvertImage = (url) => {
-      return new Promise((resolve) => {
+    const preloadAndConvertImage = (url: string | null) => {
+      return new Promise<PreloadedStepImage | null>((resolve) => {
         if (!url) return resolve(null)
         const img = new window.Image()
         img.crossOrigin = 'Anonymous'
@@ -1156,6 +1148,10 @@ function App() {
             canvas.width = img.naturalWidth || img.width
             canvas.height = img.naturalHeight || img.height
             const ctx = canvas.getContext('2d')
+            if (!ctx) {
+              resolve(null)
+              return
+            }
             ctx.drawImage(img, 0, 0)
             const dataUrl = canvas.toDataURL('image/png')
             resolve({
@@ -1171,7 +1167,7 @@ function App() {
         img.src = url
       })
     }
-    const preloadedImgs = await Promise.all(stepImages.map(url => preloadAndConvertImage(url)))
+    const preloadedImgs = await Promise.all(stepImages.map((url) => preloadAndConvertImage(url)))
 
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -1253,8 +1249,8 @@ function App() {
     const drawStep = (
       step: { title: string; description: string; keyChecks: string[] },
       index: number,
-      imageDataUrl: string,
-      preloadedImg: HTMLImageElement,
+      imageDataUrl?: string | null,
+      preloadedImg?: PreloadedStepImage | null,
     ) => {
       const keyChecks = step.keyChecks.map((item) => `- ${item}`)
       const stepLines = [step.description, 'Key Checks:', ...keyChecks]
@@ -1289,7 +1285,7 @@ function App() {
         if (preloadedImg && preloadedImg.base64) {
           let naturalWidth = preloadedImg.width
           let naturalHeight = preloadedImg.height
-          const pxToMm = (px) => px * 25.4 / 96
+          const pxToMm = (px: number) => px * 25.4 / 96
           const maxWidthMm = contentWidth - 8
           const maxHeightPx = 380
           let imageWidthPx = naturalWidth
@@ -1340,7 +1336,7 @@ function App() {
 
     for (const [index, step] of constructionGuidance.steps.entries()) {
       const image = guidanceStepImages.find((item) => item.stepTitle === step.title) ?? guidanceStepImages[index]
-      drawStep(step, index, image?.imageDataUrl, image?.imageDataUrl)
+      drawStep(step, index, image?.imageDataUrl, preloadedImgs[index])
     }
 
     drawFooter()
@@ -2653,37 +2649,37 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
+                  </select>
                   </label>
-                  <label>
-                    District
-                    <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
-                      <option value="">Select District</option>
-                      {availableMapDistricts.map((district) => (
-                        <option key={district} value={district}>
-                          {district}
-                        </option>
-                      ))}
-                    </label>
-                    <label>
-                      Report Language
-                      <select
-                        value={districtReportLanguage}
-                        onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
-                      >
-                        <option>English</option>
-                        <option>Urdu</option>
-                      </select>
-                    </label>
-                    <label>
-                      Alert Window
-                      <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
-                        <option value="24h">Last 24h</option>
-                        <option value="7d">Last 7 days</option>
-                        <option value="ongoing">Ongoing</option>
-                      </select>
-                    </label>
-                  </div>
-                </div>
+                <label>
+                  District
+                  <select value={selectedDistrict ?? ''} onChange={(event) => setSelectedDistrict(event.target.value || null)}>
+                    <option value="">Select District</option>
+                    {availableMapDistricts.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Report Language
+                  <select
+                    value={districtReportLanguage}
+                    onChange={(event) => setDistrictReportLanguage(event.target.value as typeof districtReportLanguage)}
+                  >
+                    <option>English</option>
+                    <option>Urdu</option>
+                  </select>
+                </label>
+                <label>
+                  Alert Window
+                  <select value={alertFilterWindow} onChange={(event) => setAlertFilterWindow(event.target.value as AlertFilterWindow)}>
+                    <option value="24h">Last 24h</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="ongoing">Ongoing</option>
+                  </select>
+                </label>
               </div>
             </div>
           </div>
@@ -2998,35 +2994,37 @@ function App() {
                 {Object.keys(provinceRisk).map((province) => (
                   <option key={province}>{province}</option>
                 ))}
+              </select>
               </label>
-              <label>
-                City
-                <select value={designCity} onChange={(event) => setDesignCity(event.target.value)}>
-                  {availableDesignCities.map((city) => (
-                    <option key={city}>{city}</option>
-                  ))}
-                </label>
-                <label>
-                  Soil Type
-                  <select value={designSoilType} onChange={(event) => setDesignSoilType(event.target.value as typeof designSoilType)}>
-                    <option>Rocky</option>
-                    <option>Sandy</option>
-                    <option>Clayey</option>
-                    <option>Silty</option>
-                    <option>Saline</option>
-                  </select>
-                </label>
-                <label>
-                  Humidity
-                  <select value={designHumidity} onChange={(event) => setDesignHumidity(event.target.value as typeof designHumidity)}>
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                  </select>
-                </label>
-              </div>
+            <label>
+              City
+              <select value={designCity} onChange={(event) => setDesignCity(event.target.value)}>
+                {availableDesignCities.map((city) => (
+                  <option key={city}>{city}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Soil Type
+              <select value={designSoilType} onChange={(event) => setDesignSoilType(event.target.value as typeof designSoilType)}>
+                <option>Rocky</option>
+                <option>Sandy</option>
+                <option>Clayey</option>
+                <option>Silty</option>
+                <option>Saline</option>
+              </select>
+            </label>
+            <label>
+              Humidity
+              <select value={designHumidity} onChange={(event) => setDesignHumidity(event.target.value as typeof designHumidity)}>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+              </select>
+            </label>
+          </div>
 
-              <div className="retrofit-insights-grid">
+          <div className="retrofit-insights-grid">
                 <p>
                   Seismic Zone: <strong>{designHazardOverlay.seismicZone} / 5</strong>
                 </p>
@@ -3039,7 +3037,7 @@ function App() {
                 <p>
                   Wind Exposure: <strong>{coastalCities.has(designCity) ? 'Coastal High' : 'Inland Moderate'}</strong>
                 </p>
-              </div>
+          </div>
 
               <div className="retrofit-model-output">
                 <h3>🧱 Building Material Suitability Checker</h3>
@@ -3573,30 +3571,31 @@ function App() {
                     {Object.keys(provinceRisk).map((province) => (
                       <option key={province}>{province}</option>
                     ))}
+                  </select>
                   </label>
-                  <label>
-                    City
-                    <select value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
-                      {availableApplyCities.map((city) => (
-                        <option key={city}>{city}</option>
-                      ))}
-                    </label>
-                    <label>
-                      Hazard Focus
-                      <select value={applyHazard} onChange={(event) => setApplyHazard(event.target.value as 'flood' | 'earthquake')}>
-                        <option value="flood">Flood</option>
-                        <option value="earthquake">Earthquake</option>
-                      </select>
-                    </label>
-                    <label>
-                      Best Practice
-                      <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
-                        {availableApplyBestPractices.map((item) => (
-                          <option key={item.title} value={item.title}>{item.title}</option>
-                        ))}
-                      </label>
-                  </div>
-                </div>
+                <label>
+                  City
+                  <select value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
+                    {availableApplyCities.map((city) => (
+                      <option key={city}>{city}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Hazard Focus
+                  <select value={applyHazard} onChange={(event) => setApplyHazard(event.target.value as 'flood' | 'earthquake')}>
+                    <option value="flood">Flood</option>
+                    <option value="earthquake">Earthquake</option>
+                  </select>
+                </label>
+                <label>
+                  Best Practice
+                  <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
+                    {availableApplyBestPractices.map((item) => (
+                      <option key={item.title} value={item.title}>{item.title}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 
@@ -3778,19 +3777,21 @@ function App() {
                 {Object.keys(provinceRisk).map((province) => (
                   <option key={province}>{province}</option>
                 ))}
+              </select>
               </label>
-              <label>
-                City / District (Pakistan)
-                <select
-                  value={retrofitCity}
-                  onChange={(event) => setRetrofitCity(event.target.value)}
-                >
-                  {availableRetrofitCities.map((city) => (
-                    <option key={city}>{city}</option>
-                  ))}
-                </label>
-              </div>
-              <label>
+            <label>
+              City / District (Pakistan)
+              <select
+                value={retrofitCity}
+                onChange={(event) => setRetrofitCity(event.target.value)}
+              >
+                {availableRetrofitCities.map((city) => (
+                  <option key={city}>{city}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
                 Upload Clear Building Photo
                 <input
                   type="file"
@@ -3802,7 +3803,7 @@ function App() {
                     }
                   }}
                 />
-              </label>
+          </label>
 
               {isAnalyzingImage && <p>AI is analyzing structure visibility, defects, corrosion zones, and retrofit cues...</p>}
               {retrofitError && <p>{retrofitError}</p>}
