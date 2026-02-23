@@ -2733,22 +2733,7 @@ function App() {
       localStorage.setItem('r360-global-earthquakes', JSON.stringify(latest))
       localStorage.setItem('r360-global-earthquakes-synced-at', syncedAt)
     } catch {
-      let hasCachedData = false
-      try {
-        const cached = localStorage.getItem('r360-global-earthquakes')
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          hasCachedData = Array.isArray(parsed) && parsed.length > 0
-        }
-      } catch {
-        hasCachedData = false
-      }
-
-      if (!hasCachedData) {
-        setGlobalEarthquakeError('Global live earthquake feed is temporarily unavailable. Please try again shortly.')
-      } else {
-        setGlobalEarthquakeError(null)
-      }
+      setGlobalEarthquakeError('Global live earthquake feed is temporarily unavailable. Showing last cached updates if available.')
     } finally {
       window.clearTimeout(timer)
       setIsLoadingGlobalEarthquakes(false)
