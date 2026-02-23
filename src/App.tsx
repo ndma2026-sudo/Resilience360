@@ -97,6 +97,7 @@ type GlobalEarthquake = {
 
 const GLOBAL_EARTHQUAKE_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
 const GLOBAL_EARTHQUAKE_FEED_URL_BACKUP = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson'
+const GLOBAL_EARTHQUAKE_PROXY_PREFIX = 'https://api.allorigins.win/raw?url='
 
 const translations = {
   en: {
@@ -2668,6 +2669,8 @@ function App() {
         ...buildApiTargets('/api/global-earthquakes'),
         GLOBAL_EARTHQUAKE_FEED_URL,
         GLOBAL_EARTHQUAKE_FEED_URL_BACKUP,
+        `${GLOBAL_EARTHQUAKE_PROXY_PREFIX}${encodeURIComponent(GLOBAL_EARTHQUAKE_FEED_URL)}`,
+        `${GLOBAL_EARTHQUAKE_PROXY_PREFIX}${encodeURIComponent(GLOBAL_EARTHQUAKE_FEED_URL_BACKUP)}`,
       ]
 
       let payload: {
