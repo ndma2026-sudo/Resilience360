@@ -95,7 +95,6 @@ type GlobalEarthquake = {
 }
 
 const GLOBAL_EARTHQUAKE_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
-const GLOBAL_EARTHQUAKE_MAP_URL = 'https://earth3dmap.com/earthquake-live-map/'
 
 const translations = {
   en: {
@@ -2928,19 +2927,6 @@ function App() {
             onSelectProvince={setSelectedProvince}
             onSelectDistrict={setSelectedDistrict}
           />
-          <div className="global-earthquake-panel global-earthquake-panel-fullscreen">
-            <div className="global-earthquake-map-head">
-              <h3>🌍 Global Live Earthquake Map</h3>
-            </div>
-            <div className="global-earthquake-map-wrap">
-              <iframe
-                title="Global Live Earthquake Globe"
-                src={GLOBAL_EARTHQUAKE_MAP_URL}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </div>
-          </div>
           <div className="global-earthquake-panel global-earthquake-alerts-card">
             <div className="global-earthquake-alerts-head">
               <h3>🌍 Live Earthquake Alerts</h3>
@@ -2951,15 +2937,36 @@ function App() {
             {globalEarthquakeError && <p>{globalEarthquakeError}</p>}
             <div className="global-earthquake-list">
               {globalEarthquakes.length === 0 && <p>No global earthquakes available right now.</p>}
-              {globalEarthquakes.slice(0, 15).map((quake) => (
-                <p key={quake.id}>
-                  <strong>M {quake.magnitude.toFixed(1)}</strong> • {quake.place} • {new Date(quake.time).toLocaleString()} • Depth{' '}
-                  {quake.depthKm.toFixed(1)} km •{' '}
-                  <a href={quake.url} target="_blank" rel="noreferrer">
-                    Details
-                  </a>
-                </p>
-              ))}
+              {globalEarthquakes.length > 0 && (
+                <table className="global-earthquake-table">
+                  <thead>
+                    <tr>
+                      <th>Magnitude</th>
+                      <th>Location</th>
+                      <th>Time</th>
+                      <th>Depth (km)</th>
+                      <th>Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {globalEarthquakes.slice(0, 20).map((quake) => (
+                      <tr key={quake.id}>
+                        <td>
+                          <strong>M {quake.magnitude.toFixed(1)}</strong>
+                        </td>
+                        <td>{quake.place}</td>
+                        <td>{new Date(quake.time).toLocaleString()}</td>
+                        <td>{quake.depthKm.toFixed(1)}</td>
+                        <td>
+                          <a href={quake.url} target="_blank" rel="noreferrer">
+                            Details
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
           <p>Boundary source: geoBoundaries Pakistan ADM1 + ADM2 (public-domain dataset).</p>
