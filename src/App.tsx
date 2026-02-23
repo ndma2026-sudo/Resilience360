@@ -2989,6 +2989,12 @@ function App() {
             onSelectProvince={setSelectedProvince}
             onSelectDistrict={setSelectedDistrict}
           />
+          <p>Boundary source: geoBoundaries Pakistan ADM1 + ADM2 (public-domain dataset).</p>
+          <p>Risk layer source: integrated NDMA Infrastructure Risk Atlas district profiles for practical planning workflows.</p>
+          <p>
+            Selected Risk: <strong>{selectedProvince}</strong> - <strong>{mapLayer}</strong> ={' '}
+            <strong>{riskValue}</strong>
+          </p>
           <div className="global-earthquake-panel global-earthquake-alerts-card">
             <div className="global-earthquake-alerts-head">
               <h3>🌍 Live Earthquake Alerts</h3>
@@ -3034,12 +3040,6 @@ function App() {
               )}
             </div>
           </div>
-          <p>Boundary source: geoBoundaries Pakistan ADM1 + ADM2 (public-domain dataset).</p>
-          <p>Risk layer source: integrated NDMA Infrastructure Risk Atlas district profiles for practical planning workflows.</p>
-          <p>
-            Selected Risk: <strong>{selectedProvince}</strong> - <strong>{mapLayer}</strong> ={' '}
-            <strong>{riskValue}</strong>
-          </p>
           {selectedDistrict && (
             <div className="retrofit-model-output">
               <h3>District Action Panel</h3>
