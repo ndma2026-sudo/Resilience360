@@ -151,7 +151,6 @@
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
   gap: 0.65rem;
-  min-height: 76vh;
 }
 
 .global-earthquake-map-wrap {
@@ -165,8 +164,8 @@
 .global-earthquake-map-wrap iframe {
   display: block;
   width: 100%;
-  height: 100%;
-  min-height: 72vh;
+  height: 380px;
+  min-height: 380px;
   border: 0;
 }
 
@@ -177,7 +176,8 @@
   background: #ffffff;
   display: flex;
   flex-direction: column;
-  min-height: 72vh;
+  height: 380px;
+  min-height: 380px;
 }
 
 .global-earthquake-alerts-head {
@@ -204,13 +204,37 @@
 }
 
 @media (max-width: 1024px) {
+  .global-earthquake-map-wrap iframe,
+  .global-earthquake-alerts-rail {
+    height: 340px;
+    min-height: 340px;
+  }
+}
+
+@media (max-width: 900px) {
+  .global-earthquake-map-wrap iframe,
+  .global-earthquake-alerts-rail {
+    height: 300px;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 700px) {
   .global-earthquake-layout {
     grid-template-columns: 1fr;
-    min-height: 0;
   }
 
   .global-earthquake-map-wrap iframe,
   .global-earthquake-alerts-rail {
-    min-height: 56vh;
+    height: min(48vh, 280px);
+    min-height: min(48vh, 280px);
+  }
+}
+
+@media (max-width: 520px) {
+  .global-earthquake-map-wrap iframe,
+  .global-earthquake-alerts-rail {
+    height: min(42vh, 230px);
+    min-height: min(42vh, 230px);
   }
 }
