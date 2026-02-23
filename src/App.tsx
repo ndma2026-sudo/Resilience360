@@ -867,6 +867,7 @@ function App() {
   const [isGeneratingGuidance, setIsGeneratingGuidance] = useState(false)
   const [isGeneratingStepImages, setIsGeneratingStepImages] = useState(false)
   const [guidanceError, setGuidanceError] = useState<string | null>(null)
+  const [guidanceGenerationLanguage, setGuidanceGenerationLanguage] = useState<'english' | 'urdu'>('english')
   const [infraModels, setInfraModels] = useState<InfraModel[]>(() => preloadedInfraModels)
   const [isLoadingInfraModels, setIsLoadingInfraModels] = useState(false)
   const [infraModelsError, setInfraModelsError] = useState<string | null>(null)
@@ -1076,7 +1077,8 @@ function App() {
     setBestPracticeVisibleCount(2)
   }, [bestPracticeHazard])
 
-  const generateApplyAreaGuidance = async (bestPracticeNameOverride?: string) => {
+  const generateApplyAreaGuidance = async (guidanceLanguage: 'english' | 'urdu', bestPracticeNameOverride?: string) => {
+    setGuidanceGenerationLanguage(guidanceLanguage)
     setGuidanceError(null)
     setConstructionGuidance(null)
     setGuidanceStepImages([])
@@ -1127,7 +1129,7 @@ function App() {
     setApplyBestPracticeTitle(nextBestPractice)
   }
 
-  const downloadApplyGuidanceReport = async () => {
+  const downloadApplyGuidanceReport = async (reportLanguage: 'english' | 'urdu') => {
     if (!constructionGuidance) return
 
     let reportImages = guidanceStepImages
@@ -1176,6 +1178,10 @@ function App() {
     }
 
     const drawPageHeader = (continued = false) => {
+      const reportTitle = reportLanguage === 'english'
+        ? 'Resilience360 Construction Guidance in English Report'
+        : 'Resilience360 Construction Guidance in Urdu Report'
+
       drawPageFrame()
       doc.setFillColor(238, 246, 255)
       doc.setDrawColor(199, 219, 238)
@@ -1183,13 +1189,7 @@ function App() {
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(24, 66, 105)
       doc.setFontSize(13)
-      doc.text(
-        continued
-          ? 'Resilience360 Construction Guidance in English + Urdu (Continued)'
-          : 'Resilience360 Construction Guidance in English + Urdu Report',
-        margin + 3,
-        19,
-      )
+      doc.text(continued ? `${reportTitle} (Continued)` : reportTitle, margin + 3, 19)
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(46, 71, 93)
@@ -1245,9 +1245,10 @@ function App() {
       step: { title: string; description: string; keyChecks: string[] },
       index: number,
       imageDataUrl?: string | null,
+      labels?: { step: string; keyChecks: string },
     ) => {
       const keyChecks = step.keyChecks.map((item) => `- ${item}`)
-      const stepLines = [step.description, 'Key Checks:', ...keyChecks]
+      const stepLines = [step.description, labels?.keyChecks ?? 'Key Checks:', ...keyChecks]
       const wrappedStepLines = stepLines.flatMap((line) => doc.splitTextToSize(line, contentWidth - 8))
       const lineBlockHeight = wrappedStepLines.length * 5
       const hasImage = Boolean(imageDataUrl)
@@ -1273,7 +1274,7 @@ function App() {
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(24, 66, 105)
       doc.setFontSize(10)
-      doc.text(`Step ${index + 1}: ${step.title}`, margin + 3, cursorY + 6)
+      doc.text(`${labels?.step ?? 'Step'} ${index + 1}: ${step.title}`, margin + 3, cursorY + 6)
 
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(46, 71, 93)
@@ -1299,33 +1300,44 @@ function App() {
 
     drawPageHeader()
 
-    drawSection('Project Context', [
-      `Province: ${applyProvince}`,
-      `City: ${applyCity}`,
-      `Hazard Focus: ${applyHazard}`,
-      `Best Practice: ${applyBestPracticeTitle}`,
-      `Structure Type: ${structureType}`,
-    ])
+    if (reportLanguage === 'english') {
+      drawSection('Project Context', [
+        `Province: ${applyProvince}`,
+        `City: ${applyCity}`,
+        `Hazard Focus: ${applyHazard}`,
+        `Best Practice: ${applyBestPracticeTitle}`,
+        `Structure Type: ${structureType}`,
+      ])
 
-    drawSection('Executive Summary (English)', [constructionGuidance.summary])
-    drawSection('خلاصہ (اردو)', [constructionGuidance.summaryUrdu])
-    drawSection('Recommended Materials (English)', constructionGuidance.materials.map((item) => `- ${item}`))
-    drawSection('تجویز کردہ مواد (اردو)', constructionGuidance.materialsUrdu.map((item) => `- ${item}`))
-    drawSection('Safety Requirements (English)', constructionGuidance.safety.map((item) => `- ${item}`))
-    drawSection('حفاظتی ہدایات (اردو)', constructionGuidance.safetyUrdu.map((item) => `- ${item}`))
+      drawSection('Executive Summary (English)', [constructionGuidance.summary])
+      drawSection('Recommended Materials (English)', constructionGuidance.materials.map((item) => `- ${item}`))
+      drawSection('Safety Requirements (English)', constructionGuidance.safety.map((item) => `- ${item}`))
 
-    for (const [index, step] of constructionGuidance.steps.entries()) {
-      const image = reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
-      drawStep(step, index, image?.imageDataUrl)
-    }
+      for (const [index, step] of constructionGuidance.steps.entries()) {
+        const image = reportImages.find((item) => item.stepTitle === step.title) ?? reportImages[index]
+        drawStep(step, index, image?.imageDataUrl, { step: 'Step', keyChecks: 'Key Checks:' })
+      }
+    } else {
+      drawSection('پروجیکٹ کا تناظر', [
+        `صوبہ: ${applyProvince}`,
+        `شہر: ${applyCity}`,
+        `بنیادی خطرہ: ${applyHazard}`,
+        `بہترین طریقہ کار: ${applyBestPracticeTitle}`,
+        `عمارت کی قسم: ${structureType}`,
+      ])
 
-    for (const [index, step] of constructionGuidance.stepsUrdu.entries()) {
-      const image = reportImages[index]
-      drawStep(step, index, image?.imageDataUrl)
+      drawSection('خلاصہ (اردو)', [constructionGuidance.summaryUrdu])
+      drawSection('تجویز کردہ مواد (اردو)', constructionGuidance.materialsUrdu.map((item) => `- ${item}`))
+      drawSection('حفاظتی ہدایات (اردو)', constructionGuidance.safetyUrdu.map((item) => `- ${item}`))
+
+      for (const [index, step] of constructionGuidance.stepsUrdu.entries()) {
+        const image = reportImages[index]
+        drawStep(step, index, image?.imageDataUrl, { step: 'مرحلہ', keyChecks: 'اہم جانچ نکات:' })
+      }
     }
 
     drawFooter()
-    doc.save(`resilience360-guidance-report-${applyProvince}-${applyCity}-${Date.now()}.pdf`)
+    doc.save(`resilience360-guidance-report-${reportLanguage}-${applyProvince}-${applyCity}-${Date.now()}.pdf`)
   }
 
   const designHazardOverlay = useMemo(() => getHazardOverlay(designProvince, designCity), [designProvince, designCity])
@@ -3600,9 +3612,18 @@ function App() {
                 )}
               </div>
 
-              <button onClick={() => { void generateApplyAreaGuidance() }} disabled={isGeneratingGuidance}>
-                {isGeneratingGuidance ? '⚡ Generating Construction Guidance in English + Images...' : '🛠️ Construction Guidance in English'}
-              </button>
+              <div className="inline-controls">
+                <button onClick={() => { void generateApplyAreaGuidance('english') }} disabled={isGeneratingGuidance}>
+                  {isGeneratingGuidance && guidanceGenerationLanguage === 'english'
+                    ? '⚡ Generating Construction Guidance in English + Images...'
+                    : '🛠️ Construction Guidance in English'}
+                </button>
+                <button onClick={() => { void generateApplyAreaGuidance('urdu') }} disabled={isGeneratingGuidance}>
+                  {isGeneratingGuidance && guidanceGenerationLanguage === 'urdu'
+                    ? '⚡ اردو تعمیراتی رہنمائی تیار کی جا رہی ہے...'
+                    : '🛠️ تعمیراتی رہنمائی (اردو)'}
+                </button>
+              </div>
 
               {guidanceError && <p>{guidanceError}</p>}
 
@@ -3689,11 +3710,18 @@ function App() {
                       )
                     })}
                   </div>
-                  <button onClick={downloadApplyGuidanceReport} disabled={isGeneratingStepImages}>
-                    {isGeneratingStepImages
-                      ? '📄 Preparing AI Images for Report...'
-                      : '📄 Download Professional Guidance Report (PDF)'}
-                  </button>
+                  <div className="inline-controls">
+                    <button onClick={() => { void downloadApplyGuidanceReport('english') }} disabled={isGeneratingStepImages}>
+                      {isGeneratingStepImages
+                        ? '📄 Preparing AI Images for English Report...'
+                        : '📄 Download English Guidance Report (PDF)'}
+                    </button>
+                    <button onClick={() => { void downloadApplyGuidanceReport('urdu') }} disabled={isGeneratingStepImages}>
+                      {isGeneratingStepImages
+                        ? '📄 اردو رپورٹ کے لیے AI تصاویر تیار کی جا رہی ہیں...'
+                        : '📄 اردو رہنمائی رپورٹ ڈاؤن لوڈ کریں (PDF)'}
+                    </button>
+                  </div>
                   {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
                 </div>
               )}
