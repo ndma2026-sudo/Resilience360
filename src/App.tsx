@@ -840,6 +840,7 @@ function App() {
   const [advisoryMessages, setAdvisoryMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
   const [isAskingAdvisory, setIsAskingAdvisory] = useState(false)
   const [advisoryError, setAdvisoryError] = useState<string | null>(null)
+  const [advisoryCopyMsg, setAdvisoryCopyMsg] = useState<string | null>(null)
   const [activeDrawingId, setActiveDrawingId] = useState<string | null>(null)
   const [communityLocationSuggestion, setCommunityLocationSuggestion] = useState('')
   const [structureReviewType, setStructureReviewType] = useState<'Home' | 'School' | 'Clinic' | 'Bridge'>('Home')
@@ -2344,6 +2345,30 @@ function App() {
     doc.save(`resilience360-advisory-answer-${selectedProvince}-${selectedDistrict ?? 'district'}-${Date.now()}.pdf`)
   }
 
+  const copyLatestAdvisoryAnswer = async () => {
+    const latestAssistant = [...advisoryMessages].reverse().find((message) => message.role === 'assistant')
+    if (!latestAssistant) return
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(latestAssistant.text)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = latestAssistant.text
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+
+      setAdvisoryCopyMsg('Answer copied.')
+      window.setTimeout(() => setAdvisoryCopyMsg(null), 1800)
+    } catch {
+      setAdvisoryCopyMsg('Copy failed.')
+      window.setTimeout(() => setAdvisoryCopyMsg(null), 1800)
+    }
+  }
+
   const saveDistrictProfileLocally = () => {
     const payload = {
       province: selectedProvince,
@@ -2880,7 +2905,11 @@ function App() {
                     <strong>{message.role === 'user' ? 'You' : 'Advisor'}:</strong> {message.text}
                   </p>
                 ))}
-                <button onClick={downloadLatestAdvisoryAnswerPdf}>📄 Download Latest Answer (PDF)</button>
+                <div className="inline-controls">
+                  <button onClick={downloadLatestAdvisoryAnswerPdf}>📄 Download Latest Answer (PDF)</button>
+                  <button onClick={() => { void copyLatestAdvisoryAnswer() }}>📋 Copy Answer</button>
+                </div>
+                {advisoryCopyMsg && <p>{advisoryCopyMsg}</p>}
               </div>
             )}
           </div>
