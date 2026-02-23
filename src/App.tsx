@@ -1036,8 +1036,8 @@ function App() {
   const [floorAreaSqftCost, setFloorAreaSqftCost] = useState(1200)
   const [designSummaryText, setDesignSummaryText] = useState<string | null>(null)
   const [showTrainingPrograms] = useState(false)
-  const [activeLearnVideoFile, setActiveLearnVideoFile] = useState<string | null>(null)
-  const [isLearnVideoVisible, setIsLearnVideoVisible] = useState(false)
+  const [activeLearnVideoFile, setActiveLearnVideoFile] = useState<string | null>(learnTrainingVideos[0]?.fileName ?? null)
+  const [isLearnVideoVisible, setIsLearnVideoVisible] = useState(true)
   const learnVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const t = translations[language]
@@ -1098,6 +1098,13 @@ function App() {
       return previous.slice(0, -1)
     })
   }, [])
+
+  useEffect(() => {
+    if (activeSection === 'learn' && !activeLearnVideoFile && learnTrainingVideos.length > 0) {
+      setActiveLearnVideoFile(learnTrainingVideos[0].fileName)
+      setIsLearnVideoVisible(true)
+    }
+  }, [activeSection, activeLearnVideoFile])
   const districtRiskLookup = useMemo(() => districtRiskLookupByName(), [])
   const availableMapDistricts = useMemo(() => listDistrictsByProvince(selectedProvince), [selectedProvince])
   const selectedDistrictProfile = useMemo<DistrictRiskProfile | null>(
