@@ -4723,14 +4723,14 @@ function App() {
         <div className="panel section-panel section-pgbc">
           <h2>{t.sections.coePortal}</h2>
           <div className="inline-controls">
-            <a href={`${import.meta.env.BASE_URL}coe-portal/`} target="_blank" rel="noreferrer">
+            <a href={`${import.meta.env.BASE_URL}coe-portal/#/`} target="_blank" rel="noreferrer">
               Open COE in new tab
             </a>
           </div>
           <iframe
             title="COE Training Portal"
             className="pgbc-portal-frame"
-            src={`${import.meta.env.BASE_URL}coe-portal/`}
+            src={`${import.meta.env.BASE_URL}coe-portal/#/`}
             loading="lazy"
             referrerPolicy="no-referrer"
           />
