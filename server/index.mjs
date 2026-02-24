@@ -1,14 +1,19 @@
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
+import fs from 'node:fs/promises'
 import multer from 'multer'
+import path from 'node:path'
 import OpenAI from 'openai'
-import { predictRetrofitMl } from './ml/retrofitMlModel.mjs'
+import { fileURLToPath } from 'node:url'
+import { predictRetrofitMl, retrainRetrofitMlModel } from './ml/retrofitMlModel.mjs'
 
 dotenv.config()
 
 const app = express()
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } })
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const port = Number(process.env.PORT ?? process.env.VISION_API_PORT ?? 8787)
 const model = process.env.OPENAI_VISION_MODEL ?? 'gpt-4.1-mini'
 const hasKey = Boolean(process.env.OPENAI_API_KEY)
@@ -33,6 +38,9 @@ const BREVO_API_KEY = String(process.env.BREVO_API_KEY ?? '').trim()
 const RECOVERY_RATE_LIMIT_WINDOW_MS = Math.max(60_000, Number(process.env.RECOVERY_RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000) || 15 * 60 * 1000)
 const RECOVERY_RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number(process.env.RECOVERY_RATE_LIMIT_MAX_REQUESTS ?? 6) || 6)
 const recoveryRateLimitStore = new Map()
+const retrofitTrainingDir = path.join(__dirname, 'ml', 'training')
+const retrofitTrainingImagesDir = path.join(retrofitTrainingDir, 'images')
+const retrofitTrainingDataFile = path.join(retrofitTrainingDir, 'userRetrofitTrainingData.json')
 
 const openai = hasKey ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 
@@ -147,6 +155,25 @@ const buildRecoveryEmailContent = ({ portal, fullName, role, username, credentia
     `</div>`
 
   return { subject, text, html }
+}
+
+const ensureRetrofitTrainingStorage = async () => {
+  await fs.mkdir(retrofitTrainingImagesDir, { recursive: true })
+}
+
+const readRetrofitTrainingData = async () => {
+  try {
+    const raw = await fs.readFile(retrofitTrainingDataFile, 'utf8')
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const writeRetrofitTrainingData = async (rows) => {
+  await ensureRetrofitTrainingStorage()
+  await fs.writeFile(retrofitTrainingDataFile, JSON.stringify(rows, null, 2), 'utf8')
 }
 
 const sendViaResend = async ({ toEmail, toName, subject, text, html }) => {
@@ -637,7 +664,13 @@ app.post('/api/vision/analyze', upload.single('image'), async (req, res) => {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Vision analysis failed.'
-    res.status(500).json({ error: message })
+    const statusFromProvider =
+      typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : undefined
+    const isQuotaError = /\b429\b|quota|insufficient_quota|billing|rate\s*limit/i.test(message)
+    const status = statusFromProvider ?? (isQuotaError ? 429 : 500)
+    res.status(status).json({ error: message })
   }
 })
 
@@ -652,6 +685,7 @@ app.post('/api/ml/retrofit-estimate', (req, res) => {
     const urgencyLevel = String(req.body.urgencyLevel ?? 'priority')
     const laborDaily = req.body.laborDaily !== undefined ? Number(req.body.laborDaily) : undefined
     const materialIndex = req.body.materialIndex !== undefined ? Number(req.body.materialIndex) : undefined
+    const equipmentIndex = req.body.equipmentIndex !== undefined ? Number(req.body.equipmentIndex) : undefined
     const logisticsIndex = req.body.logisticsIndex !== undefined ? Number(req.body.logisticsIndex) : undefined
     const defectProfile = req.body.defectProfile ?? {}
     const imageQuality = String(req.body.imageQuality ?? 'good')
@@ -666,6 +700,7 @@ app.post('/api/ml/retrofit-estimate', (req, res) => {
       urgencyLevel,
       laborDaily,
       materialIndex,
+      equipmentIndex,
       logisticsIndex,
       defectProfile,
       imageQuality,
@@ -674,6 +709,64 @@ app.post('/api/ml/retrofit-estimate', (req, res) => {
     res.json(prediction)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'ML estimate failed.'
+    res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/ml/training-data', upload.single('image'), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'Training image file is required.' })
+    return
+  }
+
+  try {
+    const recordId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const extension = req.file.mimetype.includes('png') ? 'png' : req.file.mimetype.includes('webp') ? 'webp' : 'jpg'
+    const imageName = `${recordId}.${extension}`
+    await ensureRetrofitTrainingStorage()
+    await fs.writeFile(path.join(retrofitTrainingImagesDir, imageName), req.file.buffer)
+
+    const record = {
+      id: recordId,
+      createdAt: new Date().toISOString(),
+      imageName,
+      structureType: String(req.body.structureType ?? 'Masonry House'),
+      province: String(req.body.province ?? 'Punjab'),
+      city: String(req.body.city ?? ''),
+      areaSqft: Number(req.body.areaSqft ?? 1200),
+      severityScore: Number(req.body.severityScore ?? 45),
+      affectedAreaPercent: Number(req.body.affectedAreaPercent ?? 25),
+      urgencyLevel: String(req.body.urgencyLevel ?? 'priority'),
+      laborDaily: Number(req.body.laborDaily ?? 2600),
+      materialIndex: Number(req.body.materialIndex ?? 1),
+      equipmentIndex: Number(req.body.equipmentIndex ?? 1),
+      logisticsIndex: Number(req.body.logisticsIndex ?? 1),
+    }
+
+    const existing = await readRetrofitTrainingData()
+    existing.push(record)
+    await writeRetrofitTrainingData(existing)
+
+    res.json({
+      message: 'Training data sample saved.',
+      sampleCount: existing.length,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save training data sample.'
+    res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/ml/retrain', async (_req, res) => {
+  try {
+    const samples = await readRetrofitTrainingData()
+    const result = retrainRetrofitMlModel(samples)
+    res.json({
+      ...result,
+      sampleCount: samples.length,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to retrain ML model.'
     res.status(500).json({ error: message })
   }
 })

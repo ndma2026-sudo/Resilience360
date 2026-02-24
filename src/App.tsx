@@ -17,6 +17,7 @@ import { fetchPmdLiveSnapshot, type PmdLiveSnapshot } from './services/pmdLive'
 import { buildApiTargets } from './services/apiBase'
 import { analyzeBuildingWithVision, type VisionAnalysisResult } from './services/vision'
 import { getMlRetrofitEstimate, type MlRetrofitEstimate } from './services/mlRetrofit'
+import { retrainRetrofitModel, uploadRetrofitTrainingData } from './services/retrofitTraining'
 import {
   generateConstructionGuidance,
   generateGuidanceStepImages,
@@ -373,7 +374,14 @@ const pakistanCitiesByProvince: Record<string, string[]> = {
   GB: ['Gilgit', 'Skardu', 'Hunza', 'Ghizer', 'Diamer', 'Ghanche', 'Astore'],
 }
 
-const cityRateByProvince: Record<string, Record<string, { laborDaily: number; materialIndex: number; logisticsIndex: number }>> = {
+type CityRateProfile = {
+  laborDaily: number
+  materialIndex: number
+  logisticsIndex: number
+  equipmentIndex?: number
+}
+
+const cityRateByProvince: Record<string, Record<string, CityRateProfile>> = {
   Punjab: {
     Lahore: { laborDaily: 3200, materialIndex: 1.1, logisticsIndex: 1.02 },
     Rawalpindi: { laborDaily: 3050, materialIndex: 1.08, logisticsIndex: 1.03 },
@@ -428,6 +436,14 @@ const cityRateByProvince: Record<string, Record<string, { laborDaily: number; ma
     Ghanche: { laborDaily: 3300, materialIndex: 1.17, logisticsIndex: 1.24 },
     Astore: { laborDaily: 3220, materialIndex: 1.14, logisticsIndex: 1.22 },
   },
+}
+
+const deriveEquipmentIndex = (cityRate: CityRateProfile): number => {
+  if (typeof cityRate.equipmentIndex === 'number') {
+    return cityRate.equipmentIndex
+  }
+  const derived = cityRate.materialIndex * 0.4 + cityRate.logisticsIndex * 0.6
+  return Math.max(0.95, Math.min(1.35, Number(derived.toFixed(2))))
 }
 
 const estimateRetrofitArea = (
@@ -1089,11 +1105,16 @@ function App() {
   const [retrofitCity, setRetrofitCity] = useState('Lahore')
   const [retrofitScope, setRetrofitScope] = useState<'Basic' | 'Standard' | 'Comprehensive'>('Standard')
   const [retrofitDamageLevel, setRetrofitDamageLevel] = useState<'Low' | 'Medium' | 'High'>('Medium')
+  const [retrofitImageFile, setRetrofitImageFile] = useState<File | null>(null)
   const [retrofitImagePreview, setRetrofitImagePreview] = useState<string | null>(null)
   const [retrofitImageInsights, setRetrofitImageInsights] = useState<ImageInsights | null>(null)
   const [visionAnalysis, setVisionAnalysis] = useState<VisionAnalysisResult | null>(null)
   const [mlEstimate, setMlEstimate] = useState<MlRetrofitEstimate | null>(null)
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false)
+  const [isGeneratingMlGuidance, setIsGeneratingMlGuidance] = useState(false)
+  const [isSavingTrainingData, setIsSavingTrainingData] = useState(false)
+  const [isTrainingMlModel, setIsTrainingMlModel] = useState(false)
+  const [trainingDataStatus, setTrainingDataStatus] = useState<string | null>(null)
   const [retrofitError, setRetrofitError] = useState<string | null>(null)
   const [alertLog, setAlertLog] = useState<LiveAlert[]>(() => {
     const cached = localStorage.getItem('r360-live-alerts')
@@ -2029,6 +2050,7 @@ function App() {
       laborDaily: 2600,
       materialIndex: 1,
       logisticsIndex: 1,
+      equipmentIndex: 1,
     }
     const laborFactor = cityRates.laborDaily / 2600
     const materialFactor = cityRates.materialIndex
@@ -2116,6 +2138,7 @@ function App() {
       laborDaily: cityRates.laborDaily,
       materialIndex: cityRates.materialIndex,
       logisticsIndex: cityRates.logisticsIndex,
+      equipmentIndex: deriveEquipmentIndex(cityRates),
       mlConfidence: mlEstimate?.confidence,
       mlModel: mlEstimate?.model,
       mlGuidance: mlEstimate?.guidance ?? [],
@@ -2140,6 +2163,102 @@ function App() {
     retrofittingTechnique:
       structureType === 'Masonry House' ? 'Steel mesh + shotcrete jacketing' : 'Column jacketing + shear walls',
   }
+
+  const isQuotaError = useCallback(
+    (message: string): boolean => /\b429\b|quota|insufficient_quota|billing|rate\s*limit/i.test(message),
+    [],
+  )
+
+  const runMlRetrofitGuidance = useCallback(
+    async (input?: {
+      costSignals?: VisionAnalysisResult['costSignals']
+      defects?: VisionAnalysisResult['defects']
+      imageQuality?: VisionAnalysisResult['imageQuality']['visibility']
+      source?: 'post-ai' | 'fallback' | 'manual'
+    }): Promise<MlRetrofitEstimate | null> => {
+      setIsGeneratingMlGuidance(true)
+
+      try {
+        const cityRates = cityRateByProvince[selectedProvince]?.[retrofitCity] ?? {
+          laborDaily: 2600,
+          materialIndex: 1,
+          logisticsIndex: 1,
+          equipmentIndex: 1,
+        }
+
+        const defects = input?.defects ?? visionAnalysis?.defects ?? []
+        const fallbackSeverityScore = defects.length
+          ? Math.round(
+              (defects.reduce(
+                (sum, defect) =>
+                  sum + (defect.severity === 'high' ? 85 : defect.severity === 'medium' ? 60 : 35) * defect.confidence,
+                0,
+              ) /
+                defects.length) *
+                1.1,
+            )
+          : retrofitImageInsights?.quality === 'Poor'
+            ? 72
+            : retrofitImageInsights?.quality === 'Fair'
+              ? 56
+              : 42
+
+        const defectProfile = defects.reduce(
+          (acc, defect) => {
+            acc[defect.type] = (acc[defect.type] ?? 0) + 1
+            return acc
+          },
+          {} as Partial<Record<'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other', number>>,
+        )
+
+        const qualityFromUpload =
+          retrofitImageInsights?.quality === 'Excellent'
+            ? 'excellent'
+            : retrofitImageInsights?.quality === 'Fair'
+              ? 'fair'
+              : retrofitImageInsights?.quality === 'Poor'
+                ? 'poor'
+                : 'good'
+
+        const ml = await getMlRetrofitEstimate({
+          structureType,
+          province: selectedProvince,
+          city: retrofitCity,
+          areaSqft: effectiveRetrofitAreaSqft,
+          severityScore: input?.costSignals?.severityScore ?? fallbackSeverityScore,
+          affectedAreaPercent: input?.costSignals?.estimatedAffectedAreaPercent ?? Math.min(85, 18 + defects.length * 8),
+          urgencyLevel:
+            input?.costSignals?.urgencyLevel ?? (defects.some((defect) => defect.severity === 'high') ? 'critical' : 'priority'),
+          laborDaily: cityRates.laborDaily,
+          materialIndex: cityRates.materialIndex,
+          equipmentIndex: deriveEquipmentIndex(cityRates),
+          logisticsIndex: cityRates.logisticsIndex,
+          defectProfile,
+          imageQuality: input?.imageQuality ?? qualityFromUpload,
+        })
+
+        setMlEstimate(ml)
+        if (input?.source === 'fallback') {
+          setRetrofitError('AI quota exceeded. Switched to Pakistan ML retrofit guidance.')
+        } else if (input?.source === 'manual') {
+          setRetrofitError(null)
+        }
+        return ml
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'ML retrofit guidance failed.'
+        setMlEstimate(null)
+        setRetrofitError(
+          input?.source === 'fallback'
+            ? 'AI quota exceeded and ML fallback is temporarily unavailable. Please try again shortly.'
+            : message,
+        )
+        return null
+      } finally {
+        setIsGeneratingMlGuidance(false)
+      }
+    },
+    [selectedProvince, retrofitCity, visionAnalysis?.defects, retrofitImageInsights, structureType, effectiveRetrofitAreaSqft],
+  )
 
   const analyzeRetrofitImage = async (file: File) => {
     setIsAnalyzingImage(true)
@@ -2256,60 +2375,83 @@ function App() {
         setRetrofitScope(detectedScope)
       }
 
-      const fallbackSeverityScore =
-        analysis.defects.length > 0
-          ? Math.round(
-              (analysis.defects.reduce(
-                (sum, defect) =>
-                  sum + (defect.severity === 'high' ? 85 : defect.severity === 'medium' ? 60 : 35) * defect.confidence,
-                0,
-              ) /
-                analysis.defects.length) *
-                1.1,
-            )
-          : 45
-
-      try {
-        const defectProfile = analysis.defects.reduce(
-          (acc, defect) => {
-            acc[defect.type] = (acc[defect.type] ?? 0) + 1
-            return acc
-          },
-          {} as Partial<Record<'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other', number>>,
-        )
-
-        const ml = await getMlRetrofitEstimate({
-          structureType,
-          province: selectedProvince,
-          city: retrofitCity,
-          areaSqft: effectiveRetrofitAreaSqft,
-          severityScore: analysis.costSignals?.severityScore ?? fallbackSeverityScore,
-          affectedAreaPercent: analysis.costSignals?.estimatedAffectedAreaPercent ?? Math.min(85, 20 + analysis.defects.length * 8),
-          urgencyLevel: analysis.costSignals?.urgencyLevel ?? (analysis.defects.some((defect) => defect.severity === 'high') ? 'critical' : 'priority'),
-          laborDaily: cityRateByProvince[selectedProvince]?.[retrofitCity]?.laborDaily,
-          materialIndex: cityRateByProvince[selectedProvince]?.[retrofitCity]?.materialIndex,
-          logisticsIndex: cityRateByProvince[selectedProvince]?.[retrofitCity]?.logisticsIndex,
-          defectProfile,
-          imageQuality:
-            analysis.imageQuality.visibility === 'excellent' ||
-            analysis.imageQuality.visibility === 'good' ||
-            analysis.imageQuality.visibility === 'fair' ||
-            analysis.imageQuality.visibility === 'poor'
-              ? analysis.imageQuality.visibility
-              : 'good',
-        })
-
-        setMlEstimate(ml)
-      } catch {
+      await runMlRetrofitGuidance({
+        costSignals: analysis.costSignals,
+        defects: analysis.defects,
+        imageQuality: analysis.imageQuality.visibility,
+        source: 'post-ai',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Image analysis failed.'
+      if (isQuotaError(message)) {
+        setVisionAnalysis(null)
+        await runMlRetrofitGuidance({ source: 'fallback' })
+      } else {
+        setRetrofitError(message)
+        setRetrofitImageInsights(null)
+        setVisionAnalysis(null)
         setMlEstimate(null)
       }
-    } catch (error) {
-      setRetrofitError(error instanceof Error ? error.message : 'Image analysis failed.')
-      setRetrofitImageInsights(null)
-      setVisionAnalysis(null)
-      setMlEstimate(null)
     } finally {
       setIsAnalyzingImage(false)
+    }
+  }
+
+  const saveRetrofitTrainingData = async () => {
+    if (!retrofitImageFile) {
+      setRetrofitError('Upload a building photo first to save training data.')
+      return
+    }
+
+    setIsSavingTrainingData(true)
+    setTrainingDataStatus(null)
+
+    try {
+      const cityRates = cityRateByProvince[selectedProvince]?.[retrofitCity] ?? {
+        laborDaily: 2600,
+        materialIndex: 1,
+        logisticsIndex: 1,
+        equipmentIndex: 1,
+      }
+
+      const response = await uploadRetrofitTrainingData({
+        image: retrofitImageFile,
+        structureType,
+        province: selectedProvince,
+        city: retrofitCity,
+        areaSqft: effectiveRetrofitAreaSqft,
+        severityScore: imageCostSignals?.severityScore ?? 45,
+        affectedAreaPercent: imageCostSignals?.affectedAreaPercent ?? 25,
+        urgencyLevel: imageCostSignals?.urgencyLevel ?? 'priority',
+        laborDaily: cityRates.laborDaily,
+        materialIndex: cityRates.materialIndex,
+        equipmentIndex: deriveEquipmentIndex(cityRates),
+        logisticsIndex: cityRates.logisticsIndex,
+      })
+
+      setTrainingDataStatus(`${response.message} Total samples: ${response.sampleCount}.`)
+      setRetrofitError(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save training data.'
+      setRetrofitError(message)
+    } finally {
+      setIsSavingTrainingData(false)
+    }
+  }
+
+  const trainRetrofitMlModelFromData = async () => {
+    setIsTrainingMlModel(true)
+    setTrainingDataStatus(null)
+
+    try {
+      const result = await retrainRetrofitModel()
+      setTrainingDataStatus(`${result.message} User samples: ${result.userRows}, total rows: ${result.totalRows}, model: ${result.modelVersion}.`)
+      setRetrofitError(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to train ML model.'
+      setRetrofitError(message)
+    } finally {
+      setIsTrainingMlModel(false)
     }
   }
 
@@ -4418,11 +4560,46 @@ function App() {
                   onChange={(event) => {
                     const file = event.target.files?.[0]
                     if (file) {
-                      void analyzeRetrofitImage(file)
+                      setRetrofitImageFile(file)
+                      setRetrofitImagePreview(URL.createObjectURL(file))
+                      setRetrofitError(null)
                     }
                   }}
                 />
           </label>
+
+              <button
+                onClick={() => {
+                  if (!retrofitImageFile) {
+                    setRetrofitError('Upload a building photo first, then click Retrofit Guidance.')
+                    return
+                  }
+                  void analyzeRetrofitImage(retrofitImageFile)
+                }}
+                disabled={isAnalyzingImage}
+              >
+                {isAnalyzingImage ? '🔄 Generating Retrofit Guidance...' : '🛠️ Retrofit Guidance'}
+              </button>
+
+              <button
+                onClick={() => {
+                  void runMlRetrofitGuidance({ source: 'manual' })
+                }}
+                disabled={isAnalyzingImage || isGeneratingMlGuidance}
+              >
+                {isGeneratingMlGuidance ? '🔄 Running ML Retrofit Guidance...' : '🤖 Run ML Retrofit Guidance'}
+              </button>
+
+              <div className="inline-controls">
+                <button onClick={saveRetrofitTrainingData} disabled={isSavingTrainingData || isAnalyzingImage}>
+                  {isSavingTrainingData ? '🔄 Saving Training Data...' : '🧪 Training Data'}
+                </button>
+                <button onClick={trainRetrofitMlModelFromData} disabled={isTrainingMlModel}>
+                  {isTrainingMlModel ? '🔄 Training ML Model...' : '📈 Train ML Model'}
+                </button>
+              </div>
+
+              {trainingDataStatus && <p>{trainingDataStatus}</p>}
 
               {isAnalyzingImage && <p>AI is analyzing structure visibility, defects, corrosion zones, and retrofit cues...</p>}
               {retrofitError && <p>{retrofitError}</p>}
@@ -4586,6 +4763,9 @@ function App() {
                   </p>
                   <p>
                     Logistics Index: <strong>{retrofitEstimate.logisticsIndex.toFixed(2)}</strong>
+                  </p>
+                  <p>
+                    Equipment Index: <strong>{retrofitEstimate.equipmentIndex.toFixed(2)}</strong>
                   </p>
                   <p>
                     Estimated Duration: <strong>{retrofitEstimate.durationWeeks} weeks</strong>

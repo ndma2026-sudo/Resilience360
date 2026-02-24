@@ -16,6 +16,11 @@ const structureBase = {
   'Bridge Approach': { baseRate: 960, baseDuration: 10 },
 }
 
+const deriveEquipmentIndex = ({ materialIndex = 1, logisticsIndex = 1 }) => {
+  const derived = materialIndex * 0.4 + logisticsIndex * 0.6
+  return Math.max(0.95, Math.min(1.35, Number(derived.toFixed(2))))
+}
+
 const cityProfiles = {
   Punjab: {
     Lahore: { laborDaily: 3200, materialIndex: 1.1, logisticsIndex: 1.02 },
@@ -69,7 +74,8 @@ const buildSyntheticHistoricalCases = () => {
           const scope = severity >= 70 ? 'comprehensive' : severity >= 50 ? 'standard' : 'basic'
           const damage = severity >= 70 ? 'high' : severity >= 50 ? 'medium' : 'low'
           const laborFactor = cityRate.laborDaily / 2600
-          const locationMultiplier = laborFactor * 0.45 + cityRate.materialIndex * 0.45 + cityRate.logisticsIndex * 0.1
+          const equipmentIndex = deriveEquipmentIndex(cityRate)
+          const locationMultiplier = laborFactor * 0.38 + cityRate.materialIndex * 0.34 + equipmentIndex * 0.18 + cityRate.logisticsIndex * 0.1
           const scopeMultiplier = scope === 'comprehensive' ? 1.42 : scope === 'standard' ? 1.18 : 0.98
           const severityMultiplier = 0.86 + severity / 150
           const riskMultiplier = provinceHazardFactor[province] ?? 1
@@ -101,8 +107,6 @@ const buildSyntheticHistoricalCases = () => {
   return rows
 }
 
-const trainingSet = buildSyntheticHistoricalCases()
-
 const featureFor = (sample) => [
   structureCode[sample.structureType] ?? 0,
   provinceCode[sample.province] ?? 0,
@@ -113,9 +117,94 @@ const featureFor = (sample) => [
   Math.log(Math.max(200, sample.area)),
 ]
 
-const allFeatures = trainingSet.map(featureFor)
-const featureMin = allFeatures[0].map((_, index) => Math.min(...allFeatures.map((row) => row[index])))
-const featureMax = allFeatures[0].map((_, index) => Math.max(...allFeatures.map((row) => row[index])))
+const syntheticTrainingSet = buildSyntheticHistoricalCases()
+let trainingSet = [...syntheticTrainingSet]
+let featureMin = []
+let featureMax = []
+
+const rebuildTrainingStats = () => {
+  if (trainingSet.length === 0) {
+    trainingSet = [...syntheticTrainingSet]
+  }
+
+  const allFeatures = trainingSet.map(featureFor)
+  featureMin = allFeatures[0].map((_, index) => Math.min(...allFeatures.map((row) => row[index])))
+  featureMax = allFeatures[0].map((_, index) => Math.max(...allFeatures.map((row) => row[index])))
+}
+
+const mapUrgencyToScore = (urgencyLevel) => {
+  if (urgencyLevel === 'critical') return 85
+  if (urgencyLevel === 'priority') return 62
+  return 38
+}
+
+const mapUserTrainingSample = (sample) => {
+  const structureType = String(sample.structureType ?? 'Masonry House')
+  const province = String(sample.province ?? 'Punjab')
+  const city = String(sample.city ?? '')
+
+  if (!structureBase[structureType]) return null
+
+  const base = structureBase[structureType]
+  const severity = Math.max(0, Math.min(100, Number(sample.severityScore) || 40))
+  const affectedArea = Math.max(5, Math.min(100, Number(sample.affectedAreaPercent) || 25))
+  const urgency = mapUrgencyToScore(String(sample.urgencyLevel ?? 'priority'))
+  const area = Math.max(200, Math.min(200000, Number(sample.areaSqft) || 1200))
+  const cityRate = cityProfiles[province]?.[city] ?? { laborDaily: 2600, materialIndex: 1, logisticsIndex: 1 }
+
+  const laborDaily = Number(sample.laborDaily) || cityRate.laborDaily
+  const materialIndex = Number(sample.materialIndex) || cityRate.materialIndex
+  const logisticsIndex = Number(sample.logisticsIndex) || cityRate.logisticsIndex
+  const equipmentIndex = Number(sample.equipmentIndex) || deriveEquipmentIndex({ materialIndex, logisticsIndex })
+
+  const laborFactor = Math.max(0.85, Math.min(1.5, laborDaily / 2600))
+  const materialFactor = Math.max(0.9, Math.min(1.4, materialIndex))
+  const logisticsFactor = Math.max(0.9, Math.min(1.4, logisticsIndex))
+  const equipmentFactor = Math.max(0.9, Math.min(1.4, equipmentIndex))
+  const locationMultiplier = laborFactor * 0.38 + materialFactor * 0.34 + equipmentFactor * 0.18 + logisticsFactor * 0.1
+
+  const scope = severity >= 70 ? 'comprehensive' : severity >= 50 ? 'standard' : 'basic'
+  const damage = severity >= 70 ? 'high' : severity >= 50 ? 'medium' : 'low'
+  const scopeMultiplier = scope === 'comprehensive' ? 1.42 : scope === 'standard' ? 1.18 : 0.98
+  const severityMultiplier = 0.86 + severity / 150
+  const riskMultiplier = provinceHazardFactor[province] ?? 1
+  const costPerSqft = base.baseRate * locationMultiplier * scopeMultiplier * severityMultiplier * riskMultiplier
+  const durationWeeks = Math.max(
+    2,
+    Math.round(base.baseDuration * (scope === 'comprehensive' ? 1.55 : scope === 'standard' ? 1.2 : 0.9) * (0.9 + urgency / 130)),
+  )
+
+  return {
+    structureType,
+    province,
+    city,
+    cityTier: inferCityTier(city),
+    severity,
+    affectedArea,
+    urgency,
+    area,
+    costPerSqft,
+    durationWeeks,
+    scope,
+    damage,
+  }
+}
+
+export const retrainRetrofitMlModel = (samples = []) => {
+  const userRows = samples.map(mapUserTrainingSample).filter(Boolean)
+  trainingSet = [...syntheticTrainingSet, ...userRows]
+  rebuildTrainingStats()
+
+  return {
+    message: 'ML retrofit model updated with training data.',
+    syntheticRows: syntheticTrainingSet.length,
+    userRows: userRows.length,
+    totalRows: trainingSet.length,
+    modelVersion: `R360-kNN-v2+u${userRows.length}`,
+  }
+}
+
+rebuildTrainingStats()
 
 const normalize = (vector) =>
   vector.map((value, index) => {
@@ -213,6 +302,7 @@ export const predictRetrofitMl = ({
   urgencyLevel,
   laborDaily,
   materialIndex,
+  equipmentIndex,
   logisticsIndex,
   defectProfile,
   imageQuality,
@@ -255,7 +345,10 @@ export const predictRetrofitMl = ({
   const laborFactor = laborDaily ? Math.max(0.85, Math.min(1.5, laborDaily / 2600)) : 1
   const materialFactor = materialIndex ? Math.max(0.9, Math.min(1.4, materialIndex)) : 1
   const logisticsFactor = logisticsIndex ? Math.max(0.9, Math.min(1.4, logisticsIndex)) : 1
-  const locationMultiplier = laborFactor * 0.45 + materialFactor * 0.45 + logisticsFactor * 0.1
+  const equipmentFactor = equipmentIndex
+    ? Math.max(0.9, Math.min(1.4, equipmentIndex))
+    : deriveEquipmentIndex({ materialIndex: materialFactor, logisticsIndex: logisticsFactor })
+  const locationMultiplier = laborFactor * 0.38 + materialFactor * 0.34 + equipmentFactor * 0.18 + logisticsFactor * 0.1
 
   const guidance = [
     predictedScope === 'comprehensive'
@@ -287,7 +380,7 @@ export const predictRetrofitMl = ({
     guidance,
     guidanceDetailed,
     assumptions: [
-      'Model is calibrated with Pakistan location rate profiles and synthetic historical retrofit cases.',
+      'Model is calibrated with Pakistan location rate profiles (labor, material, equipment, logistics) and synthetic historical retrofit cases.',
       'Guidance confidence depends on image quality and defect visibility.',
     ],
   }
