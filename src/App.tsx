@@ -3386,7 +3386,7 @@ function App() {
               type="button"
               className="map-fullscreen-launch"
               onClick={() => {
-                const fullscreenMapUrl = `${import.meta.env.BASE_URL}pakistan-risk-map-fullscreen.html?autofs=1`
+                const fullscreenMapUrl = `${import.meta.env.BASE_URL}pakistan-risk-map-fullscreen.html#autofs=1`
                 window.open(fullscreenMapUrl, '_blank', 'noopener,noreferrer')
               }}
             >
