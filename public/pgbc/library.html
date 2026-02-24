@@ -53,6 +53,28 @@
             <hr style="margin: 20px 0; border: 1px solid #ddd;">
         </div>
 
+        <div id="codeQaPanel" style="border: 1px solid rgba(153,58,139,0.25); background: #fff8f5; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <h3 style="margin: 0 0 10px 0; color: #5f2f4e;">🤖 Ask From Selected Codes</h3>
+            <p style="margin: 0 0 10px 0; color: #7a4658; font-size: 0.92rem;">
+                Ask questions like fire exits, extinguisher counts for one/two storey buildings, and other code requirements.
+            </p>
+
+            <label style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #5f2f4e; font-weight: 600; cursor: pointer;">
+                <input type="checkbox" id="selectAllCodesCheckbox" onchange="toggleSelectAllCodes(this.checked)">
+                Select all codes
+            </label>
+
+            <textarea id="codeQuestionInput" rows="3" placeholder="Type your question (e.g., How many fire extinguishers are required in a two-storey school building?)" style="width: 100%; border: 1px solid #bf7587; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 0.95rem; resize: vertical;"></textarea>
+
+            <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                <button id="answerFromCodesBtn" onclick="answerQuestionFromSelectedCodes()" style="background: #993a8b; color: white; padding: 10px 16px; font-weight: 700;">Get Answer</button>
+                <button onclick="clearCodeQaResult()" style="background: #a2574f; color: white; padding: 10px 16px;">Clear</button>
+            </div>
+
+            <div id="codeQaStatus" style="margin-top: 10px; color: #7a4658; font-size: 0.9rem;"></div>
+            <div id="codeQaResult" style="margin-top: 10px; background: white; border: 1px solid rgba(191,117,135,0.45); border-radius: 8px; padding: 12px; color: #5f2f4e; white-space: pre-wrap; line-height: 1.55;"></div>
+        </div>
+
         <h3 class="library-subtitle">📚 Available Codes</h3>
         <div id="codesList" class="library-codes-list"></div>
     </div>
@@ -134,6 +156,7 @@
         }
         
         loadCodes();
+        initializeCodeQaPanel();
     }
 </script>
 </body>

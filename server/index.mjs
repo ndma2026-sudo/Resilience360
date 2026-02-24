@@ -847,6 +847,61 @@ app.post('/api/advisory/ask', async (req, res) => {
   }
 })
 
+app.post('/api/pgbc/code-qa', async (req, res) => {
+  if (!openai) {
+    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for PGBC code Q&A.' })
+    return
+  }
+
+  try {
+    const question = String(req.body?.question ?? '').trim()
+    const codeContexts = safeArray(req.body?.codeContexts)
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 8)
+
+    if (!question) {
+      res.status(400).json({ error: 'question is required.' })
+      return
+    }
+
+    if (!codeContexts.length) {
+      res.status(400).json({ error: 'At least one selected code context is required.' })
+      return
+    }
+
+    const combinedContext = codeContexts.join('\n\n-----\n\n').slice(0, 120000)
+
+    const completion = await openai.chat.completions.create({
+      model,
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are an expert Pakistan building code assistant. Answer only from provided code context. If data is missing, clearly say it is not explicitly found in selected codes. Provide practical, compliance-focused guidance with concise bullet points.',
+        },
+        {
+          role: 'user',
+          content:
+            `User question:\n${question}\n\nSelected code context:\n${combinedContext}\n\nResponse format requirements:\n1) Start with a short direct answer.\n2) Then provide a detailed compliance explanation.\n3) Add assumptions clearly where needed.\n4) Add a final "Check in PDF" note with important verification points.`,
+        },
+      ],
+    })
+
+    const answer = completion.choices[0]?.message?.content?.trim() ?? ''
+    if (!answer) {
+      res.status(500).json({ error: 'AI returned empty answer.' })
+      return
+    }
+
+    res.json({ answer })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'PGBC code Q&A failed.'
+    res.status(500).json({ error: message })
+  }
+})
+
 app.post('/api/models/resilience-catalog', async (req, res) => {
   if (!openai) {
     res.status(503).json({

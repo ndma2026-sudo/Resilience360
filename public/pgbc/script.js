@@ -16,6 +16,7 @@ const SUPABASE_REST_HEADERS = {
     Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     "Content-Type": "application/json"
 };
+const PGBC_AI_BACKEND_PROD_BASE = 'https://resilience360-backend.onrender.com';
 
 let supabaseClientInstance = null;
 
@@ -1252,6 +1253,10 @@ function loadCodes() {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
                     <strong style="font-size: 18px; color: #5f2f4e; flex: 1;">${code.name}</strong>
                     <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <label onclick="event.stopPropagation()" style="display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid rgba(153,58,139,0.25); border-radius:6px; padding:7px 10px; color:#5f2f4e; font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" class="code-select-checkbox" data-source="predefined" data-index="${index}" data-name="${escapeHtml(code.name)}" onchange="syncSelectAllCodesCheckbox()">
+                            Select
+                        </label>
                         <a href="${code.pdfPath}" onclick="event.stopPropagation()" download="${code.name}.pdf">
                             <button style="background: #993a8b; color: white; padding: 8px 15px;">📥 PDF</button>
                         </a>
@@ -1270,6 +1275,10 @@ function loadCodes() {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <strong style="font-size: 18px; color: #5f2f4e;">${code.name}</strong>
                     <div>
+                        <label onclick="event.stopPropagation()" style="display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid rgba(153,58,139,0.25); border-radius:6px; padding:7px 10px; color:#5f2f4e; font-size:0.85rem; cursor:pointer; margin-right:5px;">
+                            <input type="checkbox" class="code-select-checkbox" data-source="uploaded" data-index="${index}" data-name="${escapeHtml(code.name)}" onchange="syncSelectAllCodesCheckbox()">
+                            Select
+                        </label>
                         <a href="${code.pdf}" onclick="event.stopPropagation()" download="${code.name}.pdf">
                             <button style="background: #993a8b; color: white; padding: 8px 15px; margin-right: 5px;">📥 Download PDF</button>
                         </a>
@@ -1280,6 +1289,268 @@ function loadCodes() {
             </div>
         `;
     });
+
+    syncSelectAllCodesCheckbox();
+}
+
+function initializeCodeQaPanel() {
+    const resultEl = document.getElementById('codeQaResult');
+    if (resultEl && !resultEl.textContent.trim()) {
+        resultEl.textContent = 'Select one or more codes, ask a question, then click "Get Answer".';
+    }
+    syncSelectAllCodesCheckbox();
+}
+
+function setCodeQaStatus(message, isError = false) {
+    const statusEl = document.getElementById('codeQaStatus');
+    if (!statusEl) return;
+    statusEl.style.color = isError ? '#9d174d' : '#7a4658';
+    statusEl.textContent = message || '';
+}
+
+function clearCodeQaResult() {
+    const input = document.getElementById('codeQuestionInput');
+    if (input) input.value = '';
+
+    const result = document.getElementById('codeQaResult');
+    if (result) result.textContent = 'Select one or more codes, ask a question, then click "Get Answer".';
+
+    setCodeQaStatus('');
+}
+
+function toggleSelectAllCodes(checked) {
+    const checkboxes = document.querySelectorAll('.code-select-checkbox');
+    checkboxes.forEach(box => {
+        box.checked = Boolean(checked);
+    });
+}
+
+function syncSelectAllCodesCheckbox() {
+    const allToggle = document.getElementById('selectAllCodesCheckbox');
+    const checkboxes = Array.from(document.querySelectorAll('.code-select-checkbox'));
+    if (!allToggle) return;
+
+    if (!checkboxes.length) {
+        allToggle.checked = false;
+        allToggle.indeterminate = false;
+        return;
+    }
+
+    const selected = checkboxes.filter(box => box.checked).length;
+    allToggle.checked = selected === checkboxes.length;
+    allToggle.indeterminate = selected > 0 && selected < checkboxes.length;
+}
+
+function getSelectedCodesForQa() {
+    const selected = [];
+    const checkboxes = Array.from(document.querySelectorAll('.code-select-checkbox'));
+
+    checkboxes.forEach(box => {
+        if (!box.checked) return;
+
+        const source = box.getAttribute('data-source');
+        const index = Number(box.getAttribute('data-index'));
+        if (!source || Number.isNaN(index)) return;
+
+        const code = source === 'predefined' ? predefinedCodes[index] : codes[index];
+        if (!code) return;
+
+        selected.push({
+            source,
+            index,
+            name: code.name,
+            pdfPath: code.pdfPath || code.pdf
+        });
+    });
+
+    return selected;
+}
+
+function extractQuestionKeywords(question) {
+    const cleaned = normalizeSearchText(question)
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .trim();
+
+    const tokens = cleaned.split(/\s+/).filter(token => token.length >= 4);
+    return [...new Set(tokens)].slice(0, 12);
+}
+
+function sliceSnippetAround(text, matchIndex, radius = 240) {
+    const source = String(text || '');
+    if (!source) return '';
+
+    const start = Math.max(0, matchIndex - radius);
+    const end = Math.min(source.length, matchIndex + radius);
+    return source.slice(start, end).replace(/\s+/g, ' ').trim();
+}
+
+function getKeywordSnippetsFromPdfText(pdfText, keywords) {
+    const source = String(pdfText || '');
+    if (!source || !keywords.length) return [];
+
+    const lower = source.toLowerCase();
+    const snippets = [];
+    const usedIndexes = new Set();
+
+    keywords.forEach(keyword => {
+        const foundAt = lower.indexOf(keyword.toLowerCase());
+        if (foundAt < 0) return;
+
+        const bucket = Math.floor(foundAt / 180);
+        if (usedIndexes.has(bucket)) return;
+        usedIndexes.add(bucket);
+
+        const snippet = sliceSnippetAround(source, foundAt, 280);
+        if (snippet) snippets.push(snippet);
+    });
+
+    return snippets.slice(0, 3);
+}
+
+async function buildCodeContextForQuestion(code, question) {
+    const keywords = extractQuestionKeywords(question);
+    const chapters = await getViewerChapters(code.name);
+
+    const chapterLines = (chapters || [])
+        .slice(0, 20)
+        .map(chapter => {
+            const chapterTitle = `Chapter ${chapter.number}: ${chapter.title}`;
+            const relevantSections = (chapter.sections || [])
+                .filter(section => {
+                    const sectionLabel = `${section.code || ''} ${section.title || ''}`;
+                    const normalized = normalizeSearchText(sectionLabel);
+                    return keywords.some(keyword => normalized.includes(keyword));
+                })
+                .slice(0, 6)
+                .map(section => `${section.code || ''} ${section.title || ''}`.trim());
+
+            if (!relevantSections.length) {
+                return `- ${chapterTitle}`;
+            }
+
+            return `- ${chapterTitle}\n  Relevant sections: ${relevantSections.join(' | ')}`;
+        })
+        .join('\n');
+
+    let keywordSnippets = [];
+    if (code.pdfPath) {
+        try {
+            const pdfText = await extractPdfText(code.pdfPath);
+            keywordSnippets = getKeywordSnippetsFromPdfText(pdfText, keywords);
+        } catch (_) {
+            keywordSnippets = [];
+        }
+    }
+
+    const snippetBlock = keywordSnippets.length
+        ? `\n\nExtracted code text snippets:\n${keywordSnippets.map((snippet, idx) => `${idx + 1}) ${snippet}`).join('\n\n')}`
+        : '';
+
+    return `Code: ${code.name}\n\nOutline:\n${chapterLines || '- No chapter outline available.'}${snippetBlock}`;
+}
+
+function getPgbcQaApiTargets() {
+    const path = '/api/pgbc/code-qa';
+    const hostname = String(window.location.hostname || '').toLowerCase();
+    const targets = [];
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        targets.push(`http://localhost:8787${path}`);
+    }
+
+    if (hostname.endsWith('github.io')) {
+        targets.push(`${PGBC_AI_BACKEND_PROD_BASE}${path}`);
+    }
+
+    targets.push(path);
+    return [...new Set(targets)];
+}
+
+async function askPgbcCodesAi(question, codeContexts) {
+    const payload = {
+        question,
+        codeContexts
+    };
+
+    let lastError = 'AI service unavailable.';
+
+    for (const target of getPgbcQaApiTargets()) {
+        try {
+            const response = await fetch(target, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                lastError = `AI request failed (${response.status}): ${errorText}`;
+                continue;
+            }
+
+            const data = await response.json();
+            const answer = String(data?.answer || '').trim();
+            if (answer) {
+                return { ok: true, answer };
+            }
+
+            lastError = 'AI returned empty answer.';
+        } catch (error) {
+            lastError = String(error?.message || error);
+        }
+    }
+
+    return { ok: false, error: lastError };
+}
+
+async function answerQuestionFromSelectedCodes() {
+    const questionInput = document.getElementById('codeQuestionInput');
+    const resultEl = document.getElementById('codeQaResult');
+    const answerButton = document.getElementById('answerFromCodesBtn');
+
+    const question = String(questionInput?.value || '').trim();
+    if (!question) {
+        setCodeQaStatus('Please enter your question.', true);
+        return;
+    }
+
+    const selectedCodes = getSelectedCodesForQa();
+    if (!selectedCodes.length) {
+        setCodeQaStatus('Select at least one code first.', true);
+        return;
+    }
+
+    if (answerButton) answerButton.disabled = true;
+    setCodeQaStatus('Preparing selected code context and generating answer...');
+    if (resultEl) resultEl.textContent = 'Generating answer from selected code books...';
+
+    try {
+        const codeContexts = [];
+        for (const code of selectedCodes) {
+            const context = await buildCodeContextForQuestion(code, question);
+            codeContexts.push(context);
+        }
+
+        const aiResult = await askPgbcCodesAi(question, codeContexts);
+        if (!aiResult.ok) {
+            setCodeQaStatus('Unable to generate answer right now.', true);
+            if (resultEl) resultEl.textContent = `Error: ${aiResult.error}`;
+            return;
+        }
+
+        const sourceList = selectedCodes.map(code => `• ${code.name}`).join('\n');
+        if (resultEl) {
+            resultEl.textContent = `${aiResult.answer}\n\nSources used:\n${sourceList}`;
+        }
+        setCodeQaStatus(`Answer generated using ${selectedCodes.length} selected code(s).`);
+    } catch (error) {
+        setCodeQaStatus('Unexpected error while generating answer.', true);
+        if (resultEl) resultEl.textContent = `Error: ${String(error?.message || error)}`;
+    } finally {
+        if (answerButton) answerButton.disabled = false;
+    }
 }
 
 function openCodeViewer(source, index) {
