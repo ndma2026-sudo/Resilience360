@@ -3239,6 +3239,18 @@ function App() {
             </p>
             <progress value={riskActionProgress} max={100} />
           </div>
+          <div className="map-fullscreen-actions">
+            <button
+              type="button"
+              className="map-fullscreen-launch"
+              onClick={() => {
+                const fullscreenMapUrl = `${import.meta.env.BASE_URL}pakistan-risk-map-fullscreen.html?autofs=1`
+                window.open(fullscreenMapUrl, '_blank', 'noopener,noreferrer')
+              }}
+            >
+              🗺️ Fullscreen Pakistan Risk Map
+            </button>
+          </div>
           <RiskMap
             layer={mapLayer}
             selectedProvince={selectedProvince}

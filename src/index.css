@@ -797,6 +797,24 @@ summary {
   color: #fff;
 }
 
+.map-fullscreen-actions {
+  margin: 0.45rem 0 0.25rem;
+}
+
+.map-fullscreen-launch {
+  border: 1px solid rgba(40, 104, 187, 0.42);
+  background: linear-gradient(180deg, #1d4ed8, #1e3a8a);
+  color: #ffffff;
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-fullscreen-launch:hover {
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+}
+
 .alerts {
   margin-top: var(--space-3);
   padding: var(--space-2);
