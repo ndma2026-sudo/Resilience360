@@ -3163,88 +3163,21 @@ function App() {
               <p className="global-earthquake-sync-meta">Last synced: {new Date(globalEarthquakesSyncedAt).toLocaleString()}</p>
             )}
             {globalEarthquakeError && <p>{globalEarthquakeError}</p>}
-            <div className="global-earthquake-live-layout">
-              <div className="global-earthquake-left-panel">
-                <div className="global-earthquake-left-head">
-                  <h4>Live Data Table</h4>
-                </div>
-                <div className="global-earthquake-actions-row">
-                  <button
-                    onClick={() => {
-                      setShowGlobalEarthquakesOnMap(true)
-                      void loadGlobalEarthquakes()
-                    }}
-                    disabled={isLoadingGlobalEarthquakes}
-                  >
-                    {isLoadingGlobalEarthquakes ? '🔄 Syncing...' : '📡 Refresh'}
-                  </button>
-                </div>
-                <div className="global-earthquake-list">
-                  {globalEarthquakes.length === 0 && <p>No global earthquakes available right now.</p>}
-                  {globalEarthquakes.length > 0 && (
-                    <table className="global-earthquake-table">
-                      <thead>
-                        <tr>
-                          <th>Magnitude</th>
-                          <th>Location</th>
-                          <th>Time</th>
-                          <th>Depth (km)</th>
-                          <th>Link</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {globalEarthquakes.slice(0, 20).map((quake) => {
-                          const magnitudeClass =
-                            quake.magnitude >= 6
-                              ? 'quake-entry-tier-veryhigh'
-                              : quake.magnitude >= 5
-                                ? 'quake-entry-tier-high'
-                                : quake.magnitude >= 4
-                                  ? 'quake-entry-tier-medium'
-                                  : 'quake-entry-tier-low'
-
-                          return (
-                            <tr
-                              key={quake.id}
-                              className={`quake-entry-button ${magnitudeClass} ${selectedGlobalEarthquakeId === quake.id ? 'selected' : ''}`}
-                              onClick={() => {
-                                setSelectedGlobalEarthquakeId(quake.id)
-                                setShowGlobalEarthquakesOnMap(true)
-                                setGlobalEarthquakeMapFocusToken((value) => value + 1)
-                              }}
-                            >
-                              <td>
-                                <strong>M {quake.magnitude.toFixed(1)}</strong>
-                              </td>
-                              <td>{quake.place}</td>
-                              <td>{new Date(quake.time).toLocaleString()}</td>
-                              <td>{quake.depthKm.toFixed(1)}</td>
-                              <td>
-                                <a href={quake.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
-                                  Details
-                                </a>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-
-              <div className="global-earthquake-right-panel">
-                <GlobalEarthquakeGlobe
-                  earthquakes={globalEarthquakes}
-                  selectedEarthquakeId={selectedGlobalEarthquakeId}
-                  onSelectEarthquake={(id) => {
-                    setSelectedGlobalEarthquakeId(id)
-                    setGlobalEarthquakeMapFocusToken((value) => value + 1)
-                  }}
-                  focusToken={globalEarthquakeMapFocusToken + globalEarthquakes.length}
-                />
-              </div>
-            </div>
+            <GlobalEarthquakeGlobe
+              earthquakes={globalEarthquakes}
+              selectedEarthquakeId={selectedGlobalEarthquakeId}
+              onSelectEarthquake={(id) => {
+                setSelectedGlobalEarthquakeId(id)
+                setShowGlobalEarthquakesOnMap(true)
+                setGlobalEarthquakeMapFocusToken((value) => value + 1)
+              }}
+              onRefreshEarthquakes={() => {
+                setShowGlobalEarthquakesOnMap(true)
+                void loadGlobalEarthquakes()
+              }}
+              isRefreshing={isLoadingGlobalEarthquakes}
+              focusToken={globalEarthquakeMapFocusToken + globalEarthquakes.length}
+            />
           </div>
           {selectedDistrict && (
             <div className="retrofit-model-output">

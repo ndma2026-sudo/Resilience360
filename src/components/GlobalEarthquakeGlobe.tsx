@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import Globe from 'react-globe.gl'
 
 type GlobalEarthquake = {
@@ -26,6 +26,8 @@ type GlobalEarthquakeGlobeProps = {
   earthquakes: GlobalEarthquake[]
   selectedEarthquakeId?: string | null
   onSelectEarthquake?: (id: string) => void
+  onRefreshEarthquakes?: () => void
+  isRefreshing?: boolean
   focusToken?: number
 }
 
@@ -49,13 +51,19 @@ export default function GlobalEarthquakeGlobe({
   earthquakes,
   selectedEarthquakeId,
   onSelectEarthquake,
+  onRefreshEarthquakes,
+  isRefreshing = false,
   focusToken = 0,
 }: GlobalEarthquakeGlobeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const tableRef = useRef<HTMLDivElement | null>(null)
   const globeRef = useRef<any>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [size, setSize] = useState({ width: 920, height: 420 })
   const [isBlinkOn, setIsBlinkOn] = useState(true)
+  const [tablePosition, setTablePosition] = useState({ x: 12, y: 56 })
+  const [isDraggingTable, setIsDraggingTable] = useState(false)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
 
   const selectedEarthquake = useMemo(
     () => earthquakes.find((quake) => quake.id === selectedEarthquakeId) ?? null,
@@ -70,6 +78,16 @@ export default function GlobalEarthquakeGlobe({
       const width = Math.max(320, Math.floor(container.clientWidth))
       const height = Math.max(320, Math.floor(Math.min(560, width * 0.55)))
       setSize({ width, height })
+
+      const tableEl = tableRef.current
+      if (tableEl) {
+        const maxX = Math.max(8, width - tableEl.offsetWidth - 8)
+        const maxY = Math.max(44, height - tableEl.offsetHeight - 8)
+        setTablePosition((prev) => ({
+          x: Math.max(8, Math.min(prev.x, maxX)),
+          y: Math.max(44, Math.min(prev.y, maxY)),
+        }))
+      }
     }
 
     updateSize()
@@ -117,6 +135,42 @@ export default function GlobalEarthquakeGlobe({
 
     return () => window.clearInterval(timer)
   }, [selectedEarthquake])
+
+  useEffect(() => {
+    if (!isDraggingTable) return
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const container = containerRef.current
+      const table = tableRef.current
+      if (!container || !table) return
+
+      const rect = container.getBoundingClientRect()
+      const width = rect.width
+      const height = rect.height
+
+      const nextX = event.clientX - rect.left - dragOffsetRef.current.x
+      const nextY = event.clientY - rect.top - dragOffsetRef.current.y
+      const maxX = Math.max(8, width - table.offsetWidth - 8)
+      const maxY = Math.max(44, height - table.offsetHeight - 8)
+
+      setTablePosition({
+        x: Math.max(8, Math.min(nextX, maxX)),
+        y: Math.max(44, Math.min(nextY, maxY)),
+      })
+    }
+
+    const handleMouseUp = () => {
+      setIsDraggingTable(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDraggingTable])
 
   const pointsData = useMemo<GlobePoint[]>(() => {
     return earthquakes.map((quake) => {
@@ -166,12 +220,90 @@ export default function GlobalEarthquakeGlobe({
     await container.requestFullscreen()
   }
 
+  const handleTableDragStart = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left - tablePosition.x,
+      y: event.clientY - rect.top - tablePosition.y,
+    }
+    setIsDraggingTable(true)
+  }
+
   return (
     <div ref={containerRef} className={`earthquake-globe-wrap${isFullscreen ? ' earthquake-globe-wrap-fullscreen' : ''}`}>
       <div className="earthquake-globe-head">
         <h4>🌐 Live Earthquake Globe</h4>
         <button onClick={handleToggleFullscreen}>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</button>
       </div>
+
+      <div
+        ref={tableRef}
+        className={`earthquake-floating-table${isDraggingTable ? ' dragging' : ''}`}
+        style={{ left: `${tablePosition.x}px`, top: `${tablePosition.y}px` }}
+      >
+        <div className="earthquake-floating-table-head" onMouseDown={handleTableDragStart}>
+          <span>Live Data Table</span>
+          <button
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => onRefreshEarthquakes?.()}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? 'Syncing...' : 'Refresh'}
+          </button>
+        </div>
+        <div className="earthquake-floating-table-body">
+          {earthquakes.length === 0 && <p className="earthquake-floating-empty">No global earthquakes available right now.</p>}
+          {earthquakes.length > 0 && (
+            <table className="earthquake-floating-grid">
+              <thead>
+                <tr>
+                  <th>Mag</th>
+                  <th>Location</th>
+                  <th>Time</th>
+                  <th>D</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {earthquakes.slice(0, 20).map((quake) => {
+                  const magnitudeClass =
+                    quake.magnitude >= 6
+                      ? 'quake-entry-tier-veryhigh'
+                      : quake.magnitude >= 5
+                        ? 'quake-entry-tier-high'
+                        : quake.magnitude >= 4
+                          ? 'quake-entry-tier-medium'
+                          : 'quake-entry-tier-low'
+
+                  return (
+                    <tr
+                      key={quake.id}
+                      className={`quake-entry-button ${magnitudeClass} ${selectedEarthquakeId === quake.id ? 'selected' : ''}`}
+                      onClick={() => onSelectEarthquake?.(quake.id)}
+                    >
+                      <td>
+                        <strong>M {quake.magnitude.toFixed(1)}</strong>
+                      </td>
+                      <td>{quake.place}</td>
+                      <td>{new Date(quake.time).toLocaleString()}</td>
+                      <td>{quake.depthKm.toFixed(1)}</td>
+                      <td>
+                        <a href={quake.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                          Details
+                        </a>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
       <div className="earthquake-globe-stage">
         <Globe
           ref={globeRef}
