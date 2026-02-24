@@ -1063,17 +1063,6 @@ const engineeringDrawingLibrary: Record<'earthquake' | 'flood' | 'infraRisk', En
   ],
 }
 
-const districtReadinessIndex: Record<
-  string,
-  { score: number; retrofittedSchools: number; shelters: number; warningCoverage: number; floodMapsPublished: boolean }
-> = {
-  Bahawalpur: { score: 62, retrofittedSchools: 88, shelters: 39, warningCoverage: 81, floodMapsPublished: true },
-  Larkana: { score: 62, retrofittedSchools: 56, shelters: 22, warningCoverage: 66, floodMapsPublished: true },
-  Lahore: { score: 74, retrofittedSchools: 71, shelters: 54, warningCoverage: 89, floodMapsPublished: true },
-  Karachi: { score: 68, retrofittedSchools: 64, shelters: 48, warningCoverage: 84, floodMapsPublished: true },
-  Swat: { score: 59, retrofittedSchools: 42, shelters: 19, warningCoverage: 63, floodMapsPublished: false },
-}
-
 const districtContacts: Record<string, string[]> = {
   default: [
     'NDMA Control Room: 051-9205037',
@@ -1158,7 +1147,6 @@ function App() {
   const [isAskingAdvisory, setIsAskingAdvisory] = useState(false)
   const [advisoryError, setAdvisoryError] = useState<string | null>(null)
   const [advisoryCopyMsg, setAdvisoryCopyMsg] = useState<string | null>(null)
-  const [activeDrawingId, setActiveDrawingId] = useState<string | null>(null)
   const [communityLocationSuggestion, setCommunityLocationSuggestion] = useState('')
   const [structureReviewType, setStructureReviewType] = useState<'Home' | 'School' | 'Clinic' | 'Bridge'>('Home')
   const [structureReviewGps, setStructureReviewGps] = useState('')
@@ -1355,19 +1343,11 @@ function App() {
     () => districtContacts[selectedDistrict ?? ''] ?? districtContacts.default,
     [selectedDistrict],
   )
-  const selectedDistrictReadiness = useMemo(
-    () => districtReadinessIndex[selectedDistrict ?? ''] ?? { score: 58, retrofittedSchools: 45, shelters: 20, warningCoverage: 61, floodMapsPublished: false },
-    [selectedDistrict],
-  )
   const evacuationAssets = useMemo(
     () => evacuationAssetsByDistrict[selectedDistrict ?? ''] ?? [],
     [selectedDistrict],
   )
   const availableDrawings = useMemo(() => engineeringDrawingLibrary[mapLayer], [mapLayer])
-  const activeDrawing = useMemo(
-    () => availableDrawings.find((drawing) => drawing.id === activeDrawingId) ?? availableDrawings[0],
-    [activeDrawingId, availableDrawings],
-  )
   const districtTopRisks = useMemo(() => {
     if (!selectedDistrictProfile) {
       return ['Unreinforced masonry in lifeline buildings', 'Poor drainage around settlements', 'Limited emergency access routes']
@@ -1922,15 +1902,6 @@ function App() {
     }
   }, [designCityRates.laborDaily, designCityRates.logisticsIndex, designCityRates.materialIndex, designHazardOverlay.floodDepth100y, designHazardOverlay.liquefaction, designHazardOverlay.seismicZone, floorAreaSqftCost, houseTypeForCost])
 
-  const communityScanner = useMemo(
-    () => [
-      { name: `${designCity} Health Post`, readiness: designHazardOverlay.floodDepth100y > 1.5 ? 'Vulnerable' : 'Moderate', priority: 'Raise utility platforms and backup power' },
-      { name: `${designCity} Government School`, readiness: designHazardOverlay.seismicZone >= 4 ? 'Vulnerable' : 'Moderate', priority: 'Add non-structural anchorage and evacuation signage' },
-      { name: `${designCity} Community Water Point`, readiness: designHazardOverlay.liquefaction === 'High' ? 'Vulnerable' : 'Moderate', priority: 'Protect pump controls and floodproof access path' },
-    ],
-    [designCity, designHazardOverlay.floodDepth100y, designHazardOverlay.liquefaction, designHazardOverlay.seismicZone],
-  )
-
   const handleEstimateTotalUpgradeCost = () => {
     setDesignSummaryText(
       `Estimated total resilient upgrade cost for ${designCity}, ${designProvince}: PKR ${Math.round(designCostEstimate.total).toLocaleString()} (including contingency).`,
@@ -2385,7 +2356,7 @@ function App() {
 
         setMlEstimate(ml)
         if (input?.source === 'fallback') {
-          setRetrofitError('AI quota exceeded. Switched to Pakistan ML retrofit guidance.')
+          setRetrofitError('AI is temporarily unavailable. Pakistan ML retrofit guidance is active.')
         } else if (input?.source === 'manual') {
           setRetrofitError(null)
         }
@@ -2395,7 +2366,7 @@ function App() {
         setMlEstimate(null)
         setRetrofitError(
           input?.source === 'fallback'
-            ? 'AI quota exceeded and ML fallback is temporarily unavailable. Please try again shortly.'
+            ? 'AI is unavailable and ML fallback is temporarily unavailable. Please verify OpenAI billing/limits and try again shortly.'
             : message,
         )
         return null
@@ -3090,22 +3061,6 @@ function App() {
       requestCurrentUserLocation()
     }
   }, [activeSection, detectedUserLocation, hasTriedApplyAutoLocation])
-
-  const downloadDrawingSheet = (drawing: EngineeringDrawing) => {
-    const doc = new jsPDF()
-    doc.setFontSize(16)
-    doc.text(`Resilience360 Drawing Note - ${drawing.title}`, 14, 18)
-    doc.setFontSize(11)
-    doc.text(`District: ${selectedDistrict ?? 'Not selected'}`, 14, 28)
-    doc.text(`Province: ${selectedProvince}`, 14, 36)
-    doc.text(`Primary Hazard Layer: ${mapLayer}`, 14, 44)
-    const summaryText = doc.splitTextToSize(`Summary: ${drawing.summary}`, 178)
-    doc.text(summaryText, 14, 54)
-    const annotationText = doc.splitTextToSize(`Annotated Notes: ${drawing.annotation}`, 178)
-    doc.text(annotationText, 14, 74)
-    doc.text('Reference: align to local building by-laws and NDMA/PDMA technical advisories.', 14, 96)
-    doc.save(`resilience360-drawing-${drawing.id}-${Date.now()}.pdf`)
-  }
 
   const openDirections = (lat: number, lng: number) => {
     if (!navigator.onLine) return
@@ -3866,31 +3821,6 @@ function App() {
           </div>
 
           <div className="retrofit-model-output">
-            <h3>🔧 Recommended Engineering Drawings by Risk Type</h3>
-            <p>
-              For {selectedDistrict ?? selectedProvince} - {mapLayer === 'infraRisk' ? 'Infrastructure Risk' : mapLayer} Risk: <strong>{riskValue}</strong>
-            </p>
-            <div className="card-grid">
-              {availableDrawings.map((drawing) => (
-                <div key={drawing.id} className="retrofit-defect-card">
-                  <h4>{drawing.title}</h4>
-                  <p>{drawing.summary}</p>
-                  <button onClick={() => setActiveDrawingId(drawing.id)}>🖼️ View Drawing</button>
-                </div>
-              ))}
-            </div>
-            {activeDrawing && (
-              <div className="retrofit-ai-guidance">
-                <p>
-                  <strong>{activeDrawing.title}</strong>
-                </p>
-                <p>{activeDrawing.annotation}</p>
-                <button onClick={() => downloadDrawingSheet(activeDrawing)}>⬇️ Download Annotated Drawing</button>
-              </div>
-            )}
-          </div>
-
-          <div className="retrofit-model-output">
             <h3>🧱 Build Better: Local Materials Guide</h3>
             <p>
               Recommended: <strong>{localMaterialGuide.recommended.join(' | ')}</strong>
@@ -3962,20 +3892,6 @@ function App() {
                 </button>
               </div>
             )}
-          </div>
-
-          <div className="retrofit-model-output">
-            <h3>📊 District Readiness Index</h3>
-            <p>
-              {selectedDistrict ?? 'Selected district'} Readiness Index: <strong>{selectedDistrictReadiness.score}/100</strong>
-            </p>
-            <ul>
-              <li>School Retrofit Rate: {selectedDistrictReadiness.retrofittedSchools}%</li>
-              <li>Shelters Available: {selectedDistrictReadiness.shelters}</li>
-              <li>Early Warning Coverage: {selectedDistrictReadiness.warningCoverage}%</li>
-              <li>Flood maps published: {selectedDistrictReadiness.floodMapsPublished ? 'Yes' : 'No'}</li>
-            </ul>
-            <button onClick={downloadDistrictRiskReport}>📊 View Full Dashboard</button>
           </div>
 
           <p>Recommendation: Prioritize retrofitting and emergency evacuation planning for high-risk districts.</p>
@@ -4186,21 +4102,6 @@ function App() {
                   <p>
                     Total Estimate: <strong>PKR {Math.round(designCostEstimate.total).toLocaleString()}</strong>
                   </p>
-                </div>
-              </div>
-
-              <div className="retrofit-model-output">
-                <h3>📍 Community Infrastructure Scanner (Beta)</h3>
-                <div className="retrofit-defect-list">
-                  {communityScanner.map((item) => (
-                    <article key={item.name} className="retrofit-defect-card">
-                      <h4>{item.name}</h4>
-                      <p>
-                        Readiness: <strong>{item.readiness}</strong>
-                      </p>
-                      <p>{item.priority}</p>
-                    </article>
-                  ))}
                 </div>
               </div>
 
