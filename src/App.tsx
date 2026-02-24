@@ -97,6 +97,112 @@ type GlobalEarthquake = {
   url: string
 }
 
+type HistoricalDisasterEvent = {
+  id: string
+  hazard: 'Flood' | 'Earthquake'
+  title: string
+  year: number
+  lat: number
+  lng: number
+  extentKm: number
+  livesLost: number
+  economicCostUsdBn?: number
+  affectedPeopleMillions?: number
+  source: string
+}
+
+const pakistanHistoricalDisasterEvents: HistoricalDisasterEvent[] = [
+  {
+    id: 'pk-eq-2005-kashmir',
+    hazard: 'Earthquake',
+    title: 'Kashmir Earthquake',
+    year: 2005,
+    lat: 34.49,
+    lng: 73.63,
+    extentKm: 130,
+    livesLost: 87350,
+    economicCostUsdBn: 5.2,
+    affectedPeopleMillions: 3.5,
+    source: 'Government of Pakistan / UN reports',
+  },
+  {
+    id: 'pk-eq-2013-awaran',
+    hazard: 'Earthquake',
+    title: 'Awaran Earthquake',
+    year: 2013,
+    lat: 26.97,
+    lng: 65.5,
+    extentKm: 95,
+    livesLost: 825,
+    economicCostUsdBn: 0.25,
+    source: 'USGS + provincial situation reports',
+  },
+  {
+    id: 'pk-eq-2019-mirpur',
+    hazard: 'Earthquake',
+    title: 'Mirpur Earthquake',
+    year: 2019,
+    lat: 33.13,
+    lng: 73.79,
+    extentKm: 70,
+    livesLost: 40,
+    economicCostUsdBn: 0.09,
+    source: 'NDMA / media-verified summaries',
+  },
+  {
+    id: 'pk-flood-2010-super',
+    hazard: 'Flood',
+    title: 'Pakistan Super Floods',
+    year: 2010,
+    lat: 30.5,
+    lng: 71.0,
+    extentKm: 500,
+    livesLost: 1985,
+    economicCostUsdBn: 9.7,
+    affectedPeopleMillions: 20,
+    source: 'NDMA / World Bank / UN OCHA',
+  },
+  {
+    id: 'pk-flood-2011-sindh',
+    hazard: 'Flood',
+    title: 'Sindh Floods',
+    year: 2011,
+    lat: 25.83,
+    lng: 68.74,
+    extentKm: 220,
+    livesLost: 520,
+    economicCostUsdBn: 2.0,
+    affectedPeopleMillions: 9,
+    source: 'Government of Sindh / UN humanitarian briefs',
+  },
+  {
+    id: 'pk-flood-2014-chenab-jhelum',
+    hazard: 'Flood',
+    title: 'Jhelum-Chenab Basin Floods',
+    year: 2014,
+    lat: 32.5,
+    lng: 74.2,
+    extentKm: 170,
+    livesLost: 367,
+    economicCostUsdBn: 1.0,
+    affectedPeopleMillions: 2.5,
+    source: 'NDMA / PDMA Punjab / relief assessments',
+  },
+  {
+    id: 'pk-flood-2022-monsoon',
+    hazard: 'Flood',
+    title: '2022 Monsoon Floods',
+    year: 2022,
+    lat: 26.2,
+    lng: 68.5,
+    extentKm: 380,
+    livesLost: 1739,
+    economicCostUsdBn: 30,
+    affectedPeopleMillions: 33,
+    source: 'NDMA + World Bank rapid damage assessment',
+  },
+]
+
 const GLOBAL_EARTHQUAKE_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson'
 const GLOBAL_EARTHQUAKE_FEED_URL_BACKUP = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson'
 const GLOBAL_EARTHQUAKE_PROXY_PREFIX = 'https://api.allorigins.win/raw?url='
@@ -3141,6 +3247,7 @@ function App() {
             districtRiskLookup={districtRiskLookup}
             alertMarkers={filteredHazardAlerts}
             globalEarthquakeMarkers={globalEarthquakes}
+            historicalDisasterEvents={pakistanHistoricalDisasterEvents}
             showGlobalEarthquakeMarkers={showGlobalEarthquakesOnMap}
             globalEarthquakeFocusToken={globalEarthquakeMapFocusToken}
             userLocationMarker={detectedUserLocation}

@@ -1,7 +1,7 @@
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import centroid from '@turf/centroid'
 import { useEffect, useMemo, useState } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { Circle, CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import { latLngBounds, type Layer } from 'leaflet'
 import adm1GeoJsonUrl from '../data/pakistan-adm1.geojson?url'
@@ -31,6 +31,20 @@ type GlobalEarthquakeMarker = {
   url: string
 }
 
+type HistoricalDisasterEventMarker = {
+  id: string
+  hazard: 'Flood' | 'Earthquake'
+  title: string
+  year: number
+  lat: number
+  lng: number
+  extentKm: number
+  livesLost: number
+  economicCostUsdBn?: number
+  affectedPeopleMillions?: number
+  source: string
+}
+
 type RiskMapProps = {
   layer: MapLayer
   selectedProvince: string
@@ -39,6 +53,7 @@ type RiskMapProps = {
   districtRiskLookup?: DistrictRiskLookup
   alertMarkers?: HazardAlertMarker[]
   globalEarthquakeMarkers?: GlobalEarthquakeMarker[]
+  historicalDisasterEvents?: HistoricalDisasterEventMarker[]
   showGlobalEarthquakeMarkers?: boolean
   globalEarthquakeFocusToken?: number
   userLocationMarker?: { lat: number; lng: number } | null
@@ -133,6 +148,7 @@ function RiskMap({
   districtRiskLookup,
   alertMarkers,
   globalEarthquakeMarkers,
+  historicalDisasterEvents,
   showGlobalEarthquakeMarkers,
   globalEarthquakeFocusToken,
   userLocationMarker,
@@ -342,6 +358,56 @@ function RiskMap({
             </Popup>
           </CircleMarker>
         ))}
+
+        {(historicalDisasterEvents ?? []).map((event) => {
+          const hazardColor = event.hazard === 'Flood' ? '#0ea5e9' : '#ef4444'
+          const fillColor = event.hazard === 'Flood' ? '#38bdf8' : '#f87171'
+          const extentRadiusMeters = Math.max(10000, event.extentKm * 1000)
+
+          return (
+            <Circle
+              key={`historic-event-${event.id}`}
+              center={[event.lat, event.lng]}
+              radius={extentRadiusMeters}
+              pathOptions={{ color: hazardColor, weight: 1.5, fillColor, fillOpacity: 0.13 }}
+            >
+              <CircleMarker
+                center={[event.lat, event.lng]}
+                radius={6}
+                pathOptions={{ color: '#1f2937', weight: 1, fillColor: hazardColor, fillOpacity: 0.9 }}
+              >
+                <Tooltip direction="top" offset={[0, -4]} opacity={1}>
+                  {event.hazard === 'Flood' ? '🌊' : '🌍'} {event.year}
+                </Tooltip>
+              </CircleMarker>
+              <Popup>
+                <strong>{event.title}</strong>
+                <br />
+                Hazard: {event.hazard}
+                <br />
+                Year: {event.year}
+                <br />
+                Estimated extent: {event.extentKm} km radius
+                <br />
+                Lives lost: {event.livesLost.toLocaleString()}
+                <br />
+                {event.affectedPeopleMillions !== undefined && (
+                  <>
+                    People affected: {event.affectedPeopleMillions.toFixed(1)} million
+                    <br />
+                  </>
+                )}
+                {event.economicCostUsdBn !== undefined && (
+                  <>
+                    Economic cost: ${event.economicCostUsdBn.toFixed(1)} bn
+                    <br />
+                  </>
+                )}
+                Source: {event.source}
+              </Popup>
+            </Circle>
+          )
+        })}
 
         {showGlobalEarthquakeMarkers &&
           (globalEarthquakeMarkers ?? []).map((quake) => {

@@ -563,6 +563,7 @@
         const glb = ensureGlobe();
 
         const items = data.slice(0, 8);
+        const globeItems = data.slice(0, 240);
         eventsEl.innerHTML = items.map((e) => {
           const country = countryFromPlace(e.properties.place);
           const mag = Number(e.properties.mag || 0);
@@ -588,7 +589,7 @@
         quakeRows = Array.from(eventsEl.querySelectorAll('.event'));
         quakeRows.forEach((row) => row.addEventListener('click', () => selectEvent(row.dataset.id)));
 
-        eventsData = items.map((e) => {
+        eventsData = globeItems.map((e) => {
           const mag = Number(e.properties.mag || 0);
           const lat = Number(e.geometry.coordinates?.[1]);
           const lng = Number(e.geometry.coordinates?.[0]);
