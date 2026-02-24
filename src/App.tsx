@@ -3165,6 +3165,9 @@ function App() {
             {globalEarthquakeError && <p>{globalEarthquakeError}</p>}
             <div className="global-earthquake-live-layout">
               <div className="global-earthquake-left-panel">
+                <div className="global-earthquake-left-head">
+                  <h4>Live Data Table</h4>
+                </div>
                 <div className="global-earthquake-actions-row">
                   <button
                     onClick={() => {
