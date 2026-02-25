@@ -796,6 +796,14 @@ const predefinedCodes = [
         ]
     },
     {
+        name: "RWH BCP 2023 (Rain Water Harvesting)",
+        pdfPath: "All Codes/RWH-BCP-2023/11_RWHP-BCP-2023.docx Issued to Shahnawaz.pdf",
+        chapters: [
+            "Table of Contents",
+            "Code Provisions"
+        ]
+    },
+    {
         name: "Pakistan Electric Telecommunication Safety Code (PETSAC) 2014",
         pdfPath: "All Codes/Pakistan-Electric-Telecommunication-Safety-Code-PETSAC-2014/Pakistan-Electric-Telecommunication-Safety-Code-PETSAC-2014.pdf",
         chapters: [
