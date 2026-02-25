@@ -717,6 +717,14 @@ img {
   margin: 4px 0;
 }
 
+.retrofit-upload-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.retrofit-upload-card {
+  cursor: pointer;
+}
+
 .retrofit-action-row {
   display: flex;
   gap: var(--space-2);
