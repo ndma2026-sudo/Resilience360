@@ -15,6 +15,11 @@ import UserLocationMiniMap from './components/UserLocationMiniMap'
 import { fetchLiveAlerts, type LiveAlert } from './services/alerts'
 import { fetchPmdLiveSnapshot, type PmdLiveSnapshot } from './services/pmdLive'
 import { buildApiTargets } from './services/apiBase'
+import {
+  fetchLiveClimateByCity,
+  fetchLiveClimateByCoordinates,
+  type LiveClimateSnapshot,
+} from './services/climateLive'
 import { analyzeBuildingWithVision, type VisionAnalysisResult } from './services/vision'
 import { getMlRetrofitEstimate, type MlRetrofitEstimate } from './services/mlRetrofit'
 import {
@@ -81,6 +86,15 @@ type RetrofitImageSeriesResult = {
   damageLevel: 'Low' | 'Medium' | 'High'
   urgencyLevel: 'routine' | 'priority' | 'critical'
   visibility: 'excellent' | 'good' | 'fair' | 'poor'
+}
+
+type RetrofitGuidanceResult = {
+  id: string
+  fileName: string
+  summary: string
+  safetyNote: string
+  visibility: 'excellent' | 'good' | 'fair' | 'poor'
+  recommendations: string[]
 }
 
 type RetrofitFinalEstimate = {
@@ -1251,6 +1265,9 @@ function App() {
   const [isUpdatingCommunityIssueId, setIsUpdatingCommunityIssueId] = useState<string | null>(null)
   const [isSubmittingCommunityIssue, setIsSubmittingCommunityIssue] = useState(false)
   const [climateLocationInput, setClimateLocationInput] = useState('')
+  const [isLoadingLiveClimate, setIsLoadingLiveClimate] = useState(false)
+  const [liveClimateError, setLiveClimateError] = useState<string | null>(null)
+  const [liveClimateSnapshot, setLiveClimateSnapshot] = useState<LiveClimateSnapshot | null>(null)
   const [selfAssessmentYearBuilt, setSelfAssessmentYearBuilt] = useState(2000)
   const [selfAssessmentConstruction, setSelfAssessmentConstruction] = useState('Reinforced Concrete')
   const [selfAssessmentDrainage, setSelfAssessmentDrainage] = useState<'Good' | 'Average' | 'Poor'>('Average')
@@ -1273,7 +1290,6 @@ function App() {
   const [isAskingAdvisory, setIsAskingAdvisory] = useState(false)
   const [advisoryError, setAdvisoryError] = useState<string | null>(null)
   const [advisoryCopyMsg, setAdvisoryCopyMsg] = useState<string | null>(null)
-  const [communityLocationSuggestion, setCommunityLocationSuggestion] = useState('')
   const [structureReviewType, setStructureReviewType] = useState<'Home' | 'School' | 'Clinic' | 'Bridge'>('Home')
   const [structureReviewGps, setStructureReviewGps] = useState('')
   const [structureReviewFile, setStructureReviewFile] = useState<File | null>(null)
@@ -1292,6 +1308,7 @@ function App() {
   const [retrofitImageSeriesFiles, setRetrofitImageSeriesFiles] = useState<File[]>([])
   const [retrofitImageSeriesPreviewUrls, setRetrofitImageSeriesPreviewUrls] = useState<string[]>([])
   const [retrofitImageSeriesResults, setRetrofitImageSeriesResults] = useState<RetrofitImageSeriesResult[]>([])
+  const [retrofitGuidanceResults, setRetrofitGuidanceResults] = useState<RetrofitGuidanceResult[]>([])
   const [retrofitFinalEstimate, setRetrofitFinalEstimate] = useState<RetrofitFinalEstimate | null>(null)
   const [visionAnalysis, setVisionAnalysis] = useState<VisionAnalysisResult | null>(null)
   const [mlEstimate, setMlEstimate] = useState<MlRetrofitEstimate | null>(null)
@@ -1582,6 +1599,53 @@ function App() {
     precautions.push('Store district emergency numbers and nearest shelter routes offline.')
     return precautions
   }, [riskValue, selectedDistrictProfile?.earthquake, selectedProvince])
+
+  const displayedClimateRiskScore = liveClimateSnapshot?.riskScore ?? climateRiskScore
+  const displayedHeatwaveRiskZone =
+    liveClimateSnapshot?.heatwaveRiskZone ?? (selectedProvince === 'Sindh' || selectedProvince === 'Punjab' ? 'High' : 'Moderate')
+  const displayedAirQualityLevel = liveClimateSnapshot?.airQualityLevel ?? (selectedProvince === 'Punjab' ? 'Moderate-Unhealthy' : 'Moderate')
+  const displayedClimatePrecautions = liveClimateSnapshot?.precautions?.length ? liveClimateSnapshot.precautions : climatePrecautions
+
+  const loadLiveClimateByCity = useCallback(
+    async (cityName: string) => {
+      const query = cityName.trim()
+      if (!query) {
+        setLiveClimateError('Enter a city/area first.')
+        return
+      }
+
+      setIsLoadingLiveClimate(true)
+      setLiveClimateError(null)
+
+      try {
+        const snapshot = await fetchLiveClimateByCity(query)
+        setLiveClimateSnapshot(snapshot)
+        setLocationText(`${snapshot.location.name}, ${snapshot.location.admin1 || snapshot.location.country}`)
+        setClimateLocationInput(snapshot.location.name)
+      } catch (error) {
+        setLiveClimateError(error instanceof Error ? error.message : 'Unable to fetch live climate data for this city.')
+      } finally {
+        setIsLoadingLiveClimate(false)
+      }
+    },
+    [],
+  )
+
+  const loadLiveClimateByCoordinates = useCallback(async (lat: number, lng: number) => {
+    setIsLoadingLiveClimate(true)
+    setLiveClimateError(null)
+
+    try {
+      const snapshot = await fetchLiveClimateByCoordinates(lat, lng)
+      setLiveClimateSnapshot(snapshot)
+      setLocationText(`${snapshot.location.name}, ${snapshot.location.admin1 || snapshot.location.country}`)
+      setClimateLocationInput(snapshot.location.name)
+    } catch (error) {
+      setLiveClimateError(error instanceof Error ? error.message : 'Unable to fetch live climate data for this location.')
+    } finally {
+      setIsLoadingLiveClimate(false)
+    }
+  }, [])
 
   const buildingSafetyAssessment = useMemo(() => {
     let score = 78
@@ -2329,6 +2393,7 @@ function App() {
     setRetrofitImageSeriesFiles(nextFiles)
     setRetrofitImageSeriesPreviewUrls(nextPreviews)
     setRetrofitImageSeriesResults([])
+    setRetrofitGuidanceResults([])
     setRetrofitFinalEstimate(null)
     setRetrofitError(null)
   }
@@ -2733,9 +2798,59 @@ function App() {
   }
 
   const generateRetrofitGuidanceFromSeries = async () => {
+    if (retrofitImageSeriesFiles.length === 0) {
+      setRetrofitError('Upload one or more building defect photos before generating guidance.')
+      return
+    }
+
+    const locationProvince = retrofitLocationMode === 'manual' ? retrofitManualProvince : selectedProvince
+    const locationCity =
+      retrofitLocationMode === 'manual'
+        ? retrofitManualCity
+        : retrofitCity || pakistanCitiesByProvince[selectedProvince]?.[0] || 'Lahore'
+
+    if (!locationProvince || !locationCity) {
+      setRetrofitError('Select a valid Pakistan province and city/district.')
+      return
+    }
+
     setIsGeneratingRetrofitGuidance(true)
+    setRetrofitError(null)
+    setRetrofitGuidanceResults([])
+
     try {
-      await calculateRetrofitEstimateFromSeries()
+      const provinceProfile = provinceRisk[locationProvince] ?? provinceRisk.Punjab
+      const riskProfile = `EQ:${provinceProfile.earthquake}, Flood:${provinceProfile.flood}, Landslide:${provinceProfile.landslide}`
+      const guidanceResults: RetrofitGuidanceResult[] = []
+
+      for (let index = 0; index < retrofitImageSeriesFiles.length; index += 1) {
+        const file = retrofitImageSeriesFiles[index]
+        const analysis = await analyzeBuildingWithVision({
+          image: file,
+          structureType,
+          province: locationProvince,
+          location: `${locationCity}, ${locationProvince}, Pakistan`,
+          riskProfile,
+        })
+
+        const recommendations = [
+          ...analysis.priorityActions,
+          ...analysis.retrofitPlan.immediate,
+          ...analysis.retrofitPlan.shortTerm,
+        ]
+        const uniqueRecommendations = Array.from(new Set(recommendations.map((item) => item.trim()).filter(Boolean))).slice(0, 8)
+
+        guidanceResults.push({
+          id: `guidance-${Date.now()}-${index}`,
+          fileName: file.name || `Image ${index + 1}`,
+          summary: analysis.summary,
+          safetyNote: analysis.safetyNote,
+          visibility: analysis.imageQuality.visibility,
+          recommendations: uniqueRecommendations,
+        })
+      }
+
+      setRetrofitGuidanceResults(guidanceResults)
     } finally {
       setIsGeneratingRetrofitGuidance(false)
     }
@@ -3091,7 +3206,7 @@ function App() {
         const nearestProvinceCities = nearestProvince ? (pakistanCitiesByProvince[nearestProvince] ?? []) : []
 
         setStructureReviewGps(gpsText)
-        setCommunityLocationSuggestion(`GPS: ${gpsText}`)
+        void loadLiveClimateByCoordinates(rawLat, rawLng)
 
         if (nearestProvince) {
           setSelectedProvince(nearestProvince)
@@ -3186,12 +3301,7 @@ function App() {
     if (!detectedUserLocation) {
       requestCurrentUserLocation()
     }
-  }, [activeSection, detectedUserLocation, hasTriedApplyAutoLocation])
-
-  const openDirections = (lat: number, lng: number) => {
-    if (!navigator.onLine) return
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank', 'noopener,noreferrer')
-  }
+  }, [activeSection, detectedUserLocation, hasTriedApplyAutoLocation, loadLiveClimateByCoordinates])
 
   const loadCommunityIssueReports = useCallback(async () => {
     setIsLoadingCommunityIssues(true)
@@ -3767,23 +3877,36 @@ function App() {
               <button
                 type="button"
                 onClick={() => {
-                  if (climateLocationInput.trim()) {
-                    setLocationText(climateLocationInput.trim())
-                  }
+                  void loadLiveClimateByCity(climateLocationInput)
                 }}
+                disabled={isLoadingLiveClimate}
               >
-                Apply Location
+                {isLoadingLiveClimate ? 'Applying...' : 'Apply Location'}
               </button>
             </div>
+            {liveClimateError && <p>{liveClimateError}</p>}
+            {liveClimateSnapshot && (
+              <p>
+                Live source: <strong>{liveClimateSnapshot.source}</strong> • Updated:{' '}
+                <strong>{new Date(liveClimateSnapshot.updatedAt).toLocaleString()}</strong>
+              </p>
+            )}
             <p>
-              Risk Score: <strong>{climateRiskScore}/100</strong>
+              Risk Score: <strong>{displayedClimateRiskScore}/100</strong>
             </p>
             <p>
-              Heatwave Risk Zone: <strong>{selectedProvince === 'Sindh' || selectedProvince === 'Punjab' ? 'High' : 'Moderate'}</strong>
+              Heatwave Risk Zone: <strong>{displayedHeatwaveRiskZone}</strong>
             </p>
             <p>
-              Air Quality Level: <strong>{selectedProvince === 'Punjab' ? 'Moderate-Unhealthy' : 'Moderate'}</strong>
+              Air Quality Level: <strong>{displayedAirQualityLevel}</strong>
             </p>
+            {liveClimateSnapshot && (
+              <p>
+                Temperature / Feels Like: <strong>{liveClimateSnapshot.metrics.temperatureC.toFixed(1)}°C / {liveClimateSnapshot.metrics.apparentTemperatureC.toFixed(1)}°C</strong>{' '}
+                • Rain Chance: <strong>{Math.round(liveClimateSnapshot.metrics.precipitationProbability)}%</strong> • AQI:{' '}
+                <strong>{Math.round(liveClimateSnapshot.metrics.usAqi)}</strong>
+              </p>
+            )}
             <p>
               Safe Shelters Nearby: <strong>{nearbyShelters.length || 'No mapped shelter in current district'}</strong>
             </p>
@@ -3796,7 +3919,7 @@ function App() {
             )}
             <h4>Precautions</h4>
             <ul>
-              {climatePrecautions.map((item) => (
+              {displayedClimatePrecautions.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
@@ -3876,44 +3999,6 @@ function App() {
               </ul>
             </div>
           )}
-
-          <div className="retrofit-model-output">
-            <h3>🛰️ Real-Time Hazard Alerts</h3>
-            <p>Showing PMD/NDMA and community-style overlays for the selected district context.</p>
-            {filteredHazardAlerts.length === 0 && <p>No alerts in this time window.</p>}
-            {filteredHazardAlerts.map((item) => (
-              <p key={item.id}>
-                <strong>
-                  {item.icon} {item.type}
-                </strong>{' '}
-                - {item.title} ({item.severity})
-              </p>
-            ))}
-          </div>
-
-          <div className="retrofit-model-output">
-            <h3>🧭 Community Evacuation Plans</h3>
-            {evacuationAssets.length === 0 && <p>No district evacuation layer uploaded yet. You can submit one below.</p>}
-            <ul>
-              {evacuationAssets.map((asset) => (
-                <li key={`${asset.kind}-${asset.name}`}>
-                  <strong>{asset.kind}:</strong> {asset.name}{' '}
-                  <button onClick={() => openDirections(asset.lat, asset.lng)} disabled={!navigator.onLine}>
-                    🧭 Get Directions
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <label>
-              Suggest community location (NGO / field officer)
-              <input
-                value={communityLocationSuggestion}
-                onChange={(event) => setCommunityLocationSuggestion(event.target.value)}
-                placeholder="e.g., School roof in Union Council 14"
-              />
-            </label>
-            {communityLocationSuggestion && <p>Suggestion captured: {communityLocationSuggestion}</p>}
-          </div>
 
           <div className="retrofit-model-output">
             <h3>Local Advisory Chatbot</h3>
@@ -5060,10 +5145,10 @@ function App() {
           <div className="retrofit-action-row" role="group" aria-label="Retrofit estimate actions">
             <button
               onClick={() => void generateRetrofitGuidanceFromSeries()}
-              disabled={isGeneratingRetrofitGuidance || isCalculatingRetrofitEstimate}
+              disabled={isGeneratingRetrofitGuidance}
             >
               {isGeneratingRetrofitGuidance
-                ? '🔄 Analyzing Cracks + Generating Comprehensive Retrofit Guidance...'
+                ? '🔄 Analyzing Images + Generating Guidance...'
                 : '🛠️ Retrofit Guidance'}
             </button>
             <button onClick={() => void calculateRetrofitEstimateFromSeries()} disabled={isCalculatingRetrofitEstimate}>
@@ -5100,7 +5185,7 @@ function App() {
 
           {retrofitImageSeriesResults.length > 0 && (
             <div className="retrofit-model-output">
-              <h3>Per-Image Analysis</h3>
+              <h3>Per-Image Cost Analysis</h3>
               <div className="retrofit-defect-list">
                 {retrofitImageSeriesResults.map((item, index) => (
                   <article key={item.id} className="retrofit-defect-card">
@@ -5119,6 +5204,36 @@ function App() {
                     <p>
                       <strong>Estimated Cost (image):</strong> PKR {Math.round(item.estimatedCost).toLocaleString()}
                     </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {retrofitGuidanceResults.length > 0 && (
+            <div className="retrofit-model-output">
+              <h3>Retrofit Guidance (Image-Based)</h3>
+              <div className="retrofit-defect-list">
+                {retrofitGuidanceResults.map((item, index) => (
+                  <article key={item.id} className="retrofit-defect-card">
+                    <h4>
+                      Image {index + 1}: {item.fileName}
+                    </h4>
+                    <p>
+                      <strong>Summary:</strong> {item.summary}
+                    </p>
+                    <p>
+                      <strong>Image Visibility:</strong> {item.visibility}
+                    </p>
+                    <p>
+                      <strong>Safety Note:</strong> {item.safetyNote}
+                    </p>
+                    <h4>Recommended Guidance</h4>
+                    <ul>
+                      {item.recommendations.map((recommendation) => (
+                        <li key={`${item.id}-${recommendation}`}>{recommendation}</li>
+                      ))}
+                    </ul>
                   </article>
                 ))}
               </div>
@@ -5182,16 +5297,6 @@ function App() {
                   Estimated Duration: <strong>{retrofitFinalEstimate.durationWeeks} weeks</strong>
                 </p>
               </div>
-              {retrofitFinalEstimate.guidance.length > 0 && (
-                <div className="retrofit-ai-guidance">
-                  <h3>Retrofit Guidance</h3>
-                  <ul>
-                    {retrofitFinalEstimate.guidance.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {mlEstimate?.guidanceDetailed && mlEstimate.guidanceDetailed.length > 0 && (
                 <div className="retrofit-defect-list">
                   {mlEstimate.guidanceDetailed.map((item) => (

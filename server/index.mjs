@@ -671,6 +671,169 @@ const parsePmdRssItems = (xmlString) => {
     }
   })
 }
+
+const parseLiveClimateLocation = (input) => {
+  const name = String(input?.name ?? '').trim()
+  const admin1 = String(input?.admin1 ?? '').trim()
+  const country = String(input?.country ?? '').trim()
+  const latitude = Number(input?.latitude)
+  const longitude = Number(input?.longitude)
+
+  if (!name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    return null
+  }
+
+  return {
+    name,
+    admin1,
+    country,
+    latitude,
+    longitude,
+  }
+}
+
+const classifyHeatwaveRisk = (temperatureC) => {
+  if (temperatureC >= 42) return 'Extreme'
+  if (temperatureC >= 37) return 'High'
+  if (temperatureC >= 32) return 'Moderate'
+  return 'Low'
+}
+
+const classifyAirQuality = (aqi) => {
+  if (aqi >= 201) return 'Very Unhealthy'
+  if (aqi >= 151) return 'Unhealthy'
+  if (aqi >= 101) return 'Unhealthy for Sensitive Groups'
+  if (aqi >= 51) return 'Moderate'
+  return 'Good'
+}
+
+const buildClimatePrecautions = ({ temperatureC, precipitationProbability, usAqi, windSpeedKmh }) => {
+  const precautions = ['Keep drinking water, torch, and emergency contacts ready.']
+
+  if (temperatureC >= 37) {
+    precautions.push('Avoid direct outdoor exposure during afternoon heat peak (12pm-4pm).')
+  }
+
+  if (precipitationProbability >= 50) {
+    precautions.push('Move valuables above expected flood level and avoid low-lying roads during rain.')
+  }
+
+  if (usAqi >= 101) {
+    precautions.push('Limit outdoor activity and use protective masks for sensitive groups when possible.')
+  }
+
+  if (windSpeedKmh >= 35) {
+    precautions.push('Secure light rooftop objects, signboards, and temporary structures against strong wind gusts.')
+  }
+
+  precautions.push('Store nearest shelter route and district helpline numbers offline.')
+  return precautions
+}
+
+const computeClimateRiskScore = ({ temperatureC, precipitationProbability, usAqi, windSpeedKmh }) => {
+  const heatScore = Math.max(0, Math.min(100, Math.round(((temperatureC - 20) / 25) * 100)))
+  const rainScore = Math.max(0, Math.min(100, Math.round(precipitationProbability)))
+  const airScore = Math.max(0, Math.min(100, Math.round((usAqi / 200) * 100)))
+  const windScore = Math.max(0, Math.min(100, Math.round((windSpeedKmh / 60) * 100)))
+  return Math.round(heatScore * 0.35 + rainScore * 0.3 + airScore * 0.25 + windScore * 0.1)
+}
+
+const resolveLiveClimateLocation = async ({ city, latitude, longitude }) => {
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    const reverseUrl = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`
+    const reverseBody = await fetchRemoteJson(reverseUrl, 22000)
+    const location = parseLiveClimateLocation(safeArray(reverseBody?.results)[0])
+    if (location) return location
+
+    return {
+      name: 'Current Location',
+      admin1: '',
+      country: 'Pakistan',
+      latitude,
+      longitude,
+    }
+  }
+
+  const query = String(city ?? '').trim()
+  if (!query) {
+    throw new Error('city or latitude/longitude is required.')
+  }
+
+  const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`
+  const geocodeBody = await fetchRemoteJson(geocodeUrl, 22000)
+  const resolved = parseLiveClimateLocation(safeArray(geocodeBody?.results)[0])
+
+  if (!resolved) {
+    throw new Error(`No live climate location match found for "${query}".`)
+  }
+
+  return resolved
+}
+
+const fetchLiveClimateSnapshot = async ({ city, latitude, longitude }) => {
+  const location = await resolveLiveClimateLocation({ city, latitude, longitude })
+
+  const forecastUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}` +
+    '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,weather_code' +
+    '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max&timezone=auto&forecast_days=1'
+
+  const airUrl =
+    `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${location.latitude}&longitude=${location.longitude}` +
+    '&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,us_aqi&timezone=auto'
+
+  const [forecastBody, airBody] = await Promise.all([
+    fetchRemoteJson(forecastUrl, 22000),
+    fetchRemoteJson(airUrl, 22000),
+  ])
+
+  const currentForecast = forecastBody?.current ?? {}
+  const currentAir = airBody?.current ?? {}
+  const temperatureC = Number(currentForecast.temperature_2m ?? 0)
+  const apparentTemperatureC = Number(currentForecast.apparent_temperature ?? temperatureC)
+  const windSpeedKmh = Number(currentForecast.wind_speed_10m ?? 0)
+  const precipitationMm = Number(currentForecast.precipitation ?? 0)
+  const humidityPercent = Number(currentForecast.relative_humidity_2m ?? 0)
+  const uvIndexMax = Number(safeArray(forecastBody?.daily?.uv_index_max)[0] ?? 0)
+  const precipitationProbability = Number(safeArray(forecastBody?.daily?.precipitation_probability_max)[0] ?? 0)
+  const pm25 = Number(currentAir.pm2_5 ?? 0)
+  const pm10 = Number(currentAir.pm10 ?? 0)
+  const usAqi = Number(currentAir.us_aqi ?? 0)
+
+  const riskScore = computeClimateRiskScore({
+    temperatureC,
+    precipitationProbability,
+    usAqi,
+    windSpeedKmh,
+  })
+
+  return {
+    source: 'Open-Meteo',
+    updatedAt: new Date().toISOString(),
+    location,
+    metrics: {
+      temperatureC,
+      apparentTemperatureC,
+      humidityPercent,
+      windSpeedKmh,
+      precipitationMm,
+      precipitationProbability,
+      uvIndexMax,
+      pm25,
+      pm10,
+      usAqi,
+    },
+    riskScore,
+    heatwaveRiskZone: classifyHeatwaveRisk(apparentTemperatureC),
+    airQualityLevel: classifyAirQuality(usAqi),
+    precautions: buildClimatePrecautions({
+      temperatureC: apparentTemperatureC,
+      precipitationProbability,
+      usAqi,
+      windSpeedKmh,
+    }),
+  }
+}
 const mapGuidanceSteps = (value) =>
   safeArray(value)
     .map((step) => ({
@@ -861,6 +1024,26 @@ app.get('/api/pmd/live', async (req, res) => {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to fetch PMD live weather updates.'
+    res.status(502).json({ error: message })
+  }
+})
+
+app.get('/api/climate/live', async (req, res) => {
+  try {
+    const city = String(req.query.city ?? '').trim()
+    const latitude = req.query.lat !== undefined ? Number(req.query.lat) : Number.NaN
+    const longitude = req.query.lng !== undefined ? Number(req.query.lng) : Number.NaN
+
+    const snapshot = await fetchLiveClimateSnapshot({
+      city,
+      latitude,
+      longitude,
+    })
+
+    res.setHeader('Cache-Control', 'no-store')
+    res.json(snapshot)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to fetch live climate data for this location.'
     res.status(502).json({ error: message })
   }
 })
