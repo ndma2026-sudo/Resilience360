@@ -65,6 +65,7 @@ type SectionKey =
   | 'infraModels'
   | 'coePortal'
   | 'pgbc'
+  | 'materialHubs'
   | 'applyRegion'
   | 'readiness'
   | 'retrofit'
@@ -405,6 +406,7 @@ const translations = {
       infraModels: '🧱 Resilience Infra Models',
       coePortal: '🎓 COE Training Portal',
       pgbc: '🏛️ PGBC Portal',
+      materialHubs: '🧱 Material Hubs',
       applyRegion: '📍 Construct in my Region',
       readiness: '📊 Readiness Calculator',
       retrofit: '🧰 Retrofit Guide',
@@ -428,6 +430,7 @@ const translations = {
       infraModels: '🧱 ریزیلینس انفرا ماڈلز',
       coePortal: '🎓 سی او ای ٹریننگ پورٹل',
       pgbc: '🏛️ پی جی بی سی پورٹل',
+      materialHubs: '🧱 میٹریل ہبس',
       applyRegion: '📍 اپنے علاقے میں تعمیر',
       readiness: '📊 تیاری کیلکولیٹر',
       retrofit: '🧰 ریٹروفٹ گائیڈ',
@@ -575,6 +578,8 @@ const getHazardOverlay = (province: string, city: string) => {
 
 const roleOptions = ['General Public', 'Engineer / Planner', 'Government Officer'] as const
 const BUILD_VERSION_LABEL = String(import.meta.env.VITE_BUILD_VERSION ?? 'local').slice(0, 7)
+const MATERIAL_HUBS_PORTAL_URL =
+  'https://www.figma.com/make/GCLNXTTRfhfEMjziUBvt4X/Material-Hub-Digital-Portal?t=X0Eph49SSE2a0nNW-1&preview-route=%2Ftraining'
 
 const homeSectionKeys: SectionKey[] = [
   'bestPractices',
@@ -582,6 +587,7 @@ const homeSectionKeys: SectionKey[] = [
   'designToolkit',
   'infraModels',
   'pgbc',
+  'materialHubs',
   'retrofit',
   'warning',
   'learn',
@@ -633,6 +639,12 @@ const homeCardMeta: Record<
     title: 'PGBC',
     subtitle: 'Green Building Codes',
     tone: 'tone-c',
+  },
+  materialHubs: {
+    icon: '🧱',
+    title: 'Material Hubs',
+    subtitle: 'Digital Portal',
+    tone: 'tone-d',
   },
   applyRegion: {
     icon: '📍',
@@ -5573,6 +5585,29 @@ function App() {
             title="COE Training Portal"
             className="pgbc-portal-frame"
             src={`${import.meta.env.BASE_URL}coe-portal/#/`}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )
+    }
+
+    if (activeSection === 'materialHubs') {
+      return (
+        <div className="panel section-panel section-pgbc">
+          <h2>{t.sections.materialHubs}</h2>
+          <div className="inline-controls">
+            <button type="button" onClick={() => navigateToSection(null)}>
+              ⬅ Back to Resilience Home
+            </button>
+            <a href={MATERIAL_HUBS_PORTAL_URL} target="_blank" rel="noreferrer">
+              Open Material Hubs in new tab
+            </a>
+          </div>
+          <iframe
+            title="Material Hubs Portal"
+            className="pgbc-portal-frame"
+            src={MATERIAL_HUBS_PORTAL_URL}
             loading="lazy"
             referrerPolicy="no-referrer"
           />
