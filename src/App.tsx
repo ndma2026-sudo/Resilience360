@@ -2282,7 +2282,10 @@ function App() {
   }
 
   const isQuotaError = useCallback(
-    (message: string): boolean => /\b429\b|quota|insufficient_quota|billing|rate\s*limit/i.test(message),
+    (message: string): boolean =>
+      /\b429\b|\b422\b|quota|insufficient_quota|billing|rate\s*limit|requested model|not supported by any provider|provider you have enabled|unsupported model|unprocessable|status code \(no body\)/i.test(
+        message,
+      ),
     [],
   )
 
