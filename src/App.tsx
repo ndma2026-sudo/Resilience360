@@ -17,7 +17,6 @@ import { fetchPmdLiveSnapshot, type PmdLiveSnapshot } from './services/pmdLive'
 import { buildApiTargets } from './services/apiBase'
 import { analyzeBuildingWithVision, type VisionAnalysisResult } from './services/vision'
 import { getMlRetrofitEstimate, type MlRetrofitEstimate } from './services/mlRetrofit'
-import { retrainRetrofitModel, uploadRetrofitTrainingData } from './services/retrofitTraining'
 import {
   fetchCommunityIssues,
   submitCommunityIssue,
@@ -63,13 +62,46 @@ type SectionKey =
   | 'learn'
   | 'settings'
 
-type ImageInsights = {
-  width: number
-  height: number
-  brightness: number
-  contrast: number
-  sharpness: number
-  quality: 'Excellent' | 'Good' | 'Fair' | 'Poor'
+type RetrofitImageSeriesResult = {
+  id: string
+  fileName: string
+  previewUrl: string
+  summary: string
+  defectCount: number
+  severityScore: number
+  affectedAreaPercent: number
+  estimatedCost: number
+  recommendedScope: 'Basic' | 'Standard' | 'Comprehensive'
+  damageLevel: 'Low' | 'Medium' | 'High'
+  urgencyLevel: 'routine' | 'priority' | 'critical'
+  visibility: 'excellent' | 'good' | 'fair' | 'poor'
+}
+
+type RetrofitFinalEstimate = {
+  estimateSource: 'ML Model' | 'Image-driven'
+  province: string
+  city: string
+  stories: number
+  imageCount: number
+  totalAreaSqft: number
+  durationWeeks: number
+  totalCost: number
+  minTotalCost: number
+  maxTotalCost: number
+  sqftRate: number
+  locationFactor: number
+  laborDaily: number
+  materialIndex: number
+  logisticsIndex: number
+  equipmentIndex: number
+  scope: 'Basic' | 'Standard' | 'Comprehensive'
+  damageLevel: 'Low' | 'Medium' | 'High'
+  urgencyLevel: 'routine' | 'priority' | 'critical'
+  affectedAreaPercent: number
+  severityScore: number
+  mlModel?: string
+  mlConfidence?: number
+  guidance: string[]
 }
 
 type AlertFilterWindow = '24h' | '7d' | 'ongoing'
@@ -486,27 +518,6 @@ const deriveEquipmentIndex = (cityRate: CityRateProfile): number => {
   }
   const derived = cityRate.materialIndex * 0.4 + cityRate.logisticsIndex * 0.6
   return Math.max(0.95, Math.min(1.35, Number(derived.toFixed(2))))
-}
-
-const estimateRetrofitArea = (
-  structureType: string,
-  signals: VisionAnalysisResult['costSignals'] | null | undefined,
-  defectCount: number,
-): number => {
-  const baseAreaByStructure: Record<string, number> = {
-    'Masonry House': 1200,
-    'RC Frame': 2200,
-    'School Block': 6500,
-    'Bridge Approach': 3200,
-  }
-
-  const baseArea = baseAreaByStructure[structureType] ?? 1500
-  const affectedPercent = Math.max(8, Math.min(100, Number(signals?.estimatedAffectedAreaPercent) || 18 + defectCount * 8))
-  const severityScore = Math.max(0, Math.min(100, Number(signals?.severityScore) || 40 + defectCount * 6))
-  const urgencyBoost = signals?.urgencyLevel === 'critical' ? 1.12 : signals?.urgencyLevel === 'priority' ? 1.06 : 1
-
-  const areaFactor = 0.58 + affectedPercent / 130 + severityScore / 420
-  return Math.round(Math.max(450, Math.min(25000, baseArea * areaFactor * urgencyBoost)))
 }
 
 const coastalCities = new Set(['Karachi', 'Thatta', 'Badin', 'Gwadar'])
@@ -1161,18 +1172,17 @@ function App() {
   const [structureType, setStructureType] = useState('Masonry House')
   const [retrofitAreaSqft, setRetrofitAreaSqft] = useState(1200)
   const [retrofitCity, setRetrofitCity] = useState('Lahore')
-  const [retrofitScope, setRetrofitScope] = useState<'Basic' | 'Standard' | 'Comprehensive'>('Standard')
-  const [retrofitDamageLevel, setRetrofitDamageLevel] = useState<'Low' | 'Medium' | 'High'>('Medium')
-  const [retrofitImageFile, setRetrofitImageFile] = useState<File | null>(null)
-  const [retrofitImagePreview, setRetrofitImagePreview] = useState<string | null>(null)
-  const [retrofitImageInsights, setRetrofitImageInsights] = useState<ImageInsights | null>(null)
+  const [retrofitStories, setRetrofitStories] = useState(1)
+  const [retrofitLocationMode, setRetrofitLocationMode] = useState<'auto' | 'manual'>('auto')
+  const [retrofitManualProvince, setRetrofitManualProvince] = useState('Punjab')
+  const [retrofitManualCity, setRetrofitManualCity] = useState('Lahore')
+  const [retrofitImageSeriesFiles, setRetrofitImageSeriesFiles] = useState<File[]>([])
+  const [retrofitImageSeriesPreviewUrls, setRetrofitImageSeriesPreviewUrls] = useState<string[]>([])
+  const [retrofitImageSeriesResults, setRetrofitImageSeriesResults] = useState<RetrofitImageSeriesResult[]>([])
+  const [retrofitFinalEstimate, setRetrofitFinalEstimate] = useState<RetrofitFinalEstimate | null>(null)
   const [visionAnalysis, setVisionAnalysis] = useState<VisionAnalysisResult | null>(null)
   const [mlEstimate, setMlEstimate] = useState<MlRetrofitEstimate | null>(null)
-  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false)
-  const [isGeneratingMlGuidance, setIsGeneratingMlGuidance] = useState(false)
-  const [isSavingTrainingData, setIsSavingTrainingData] = useState(false)
-  const [isTrainingMlModel, setIsTrainingMlModel] = useState(false)
-  const [trainingDataStatus, setTrainingDataStatus] = useState<string | null>(null)
+  const [isCalculatingRetrofitEstimate, setIsCalculatingRetrofitEstimate] = useState(false)
   const [retrofitError, setRetrofitError] = useState<string | null>(null)
   const [alertLog, setAlertLog] = useState<LiveAlert[]>(() => {
     const cached = localStorage.getItem('r360-live-alerts')
@@ -1282,6 +1292,10 @@ function App() {
     if (videoElement.webkitEnterFullscreen) {
       videoElement.webkitEnterFullscreen()
     }
+  }, [])
+
+  const openPgbcPortalHome = useCallback(() => {
+    window.location.href = `${import.meta.env.BASE_URL}pgbc/index.html`
   }, [])
 
   const navigateToSection = useCallback(
@@ -1481,6 +1495,10 @@ function App() {
     selfAssessmentYearBuilt,
   ])
   const availableRetrofitCities = useMemo(() => pakistanCitiesByProvince[selectedProvince] ?? [], [selectedProvince])
+  const availableRetrofitManualCities = useMemo(
+    () => pakistanCitiesByProvince[retrofitManualProvince] ?? [],
+    [retrofitManualProvince],
+  )
   const availableApplyCities = useMemo(() => pakistanCitiesByProvince[applyProvince] ?? [], [applyProvince])
   const availableApplyBestPractices = useMemo(() => globalPracticeLibrary[applyHazard], [applyHazard])
   const availableDesignCities = useMemo(() => pakistanCitiesByProvince[designProvince] ?? [], [designProvince])
@@ -1494,6 +1512,18 @@ function App() {
       setRetrofitCity(availableRetrofitCities[0] ?? '')
     }
   }, [availableRetrofitCities, retrofitCity])
+
+  useEffect(() => {
+    if (!availableRetrofitManualCities.includes(retrofitManualCity)) {
+      setRetrofitManualCity(availableRetrofitManualCities[0] ?? '')
+    }
+  }, [availableRetrofitManualCities, retrofitManualCity])
+
+  useEffect(() => {
+    return () => {
+      retrofitImageSeriesPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [retrofitImageSeriesPreviewUrls])
 
   useEffect(() => {
     if (!availableApplyCities.includes(applyCity)) {
@@ -1966,9 +1996,15 @@ function App() {
         for (const model of existing) {
           deduped.set(model.id, model)
         }
-        for (const model of result.models) {
-          const key = deduped.has(model.id) ? `${model.id}-${model.title}` : model.id
-          deduped.set(key, model)
+        for (const [index, model] of result.models.entries()) {
+          let key = model.id
+          while (deduped.has(key)) {
+            key = `${model.id}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`
+          }
+          deduped.set(key, {
+            ...model,
+            id: key,
+          })
         }
         return Array.from(deduped.values())
       })
@@ -2062,225 +2098,6 @@ function App() {
     return Math.min(score, 100)
   }, [buildingType, materialType, lifeline, locationText])
 
-  const imageCostSignals = useMemo(() => {
-    if (!visionAnalysis) return null
-    const signals = visionAnalysis.costSignals
-
-    const mapScope = (scope: 'basic' | 'standard' | 'comprehensive'): 'Basic' | 'Standard' | 'Comprehensive' => {
-      if (scope === 'basic') return 'Basic'
-      if (scope === 'comprehensive') return 'Comprehensive'
-      return 'Standard'
-    }
-
-    const mapDamage = (level: 'low' | 'medium' | 'high'): 'Low' | 'Medium' | 'High' => {
-      if (level === 'low') return 'Low'
-      if (level === 'high') return 'High'
-      return 'Medium'
-    }
-
-    const confidenceMean =
-      visionAnalysis && visionAnalysis.defects.length > 0
-        ? visionAnalysis.defects.reduce((sum, defect) => sum + defect.confidence, 0) / visionAnalysis.defects.length
-        : 0.6
-
-    if (!signals) {
-      const defectCount = visionAnalysis.defects.length
-      const highCount = visionAnalysis.defects.filter((defect) => defect.severity === 'high').length
-      const mediumCount = visionAnalysis.defects.filter((defect) => defect.severity === 'medium').length
-      const lowCount = visionAnalysis.defects.filter((defect) => defect.severity === 'low').length
-
-      const weightedSeverity = highCount * 3 + mediumCount * 2 + lowCount
-      const averageSeverity = defectCount > 0 ? weightedSeverity / defectCount : 1.4
-      const assessedDamageLevel: 'Low' | 'Medium' | 'High' =
-        averageSeverity >= 2.4 ? 'High' : averageSeverity >= 1.65 ? 'Medium' : 'Low'
-      const severityScore = Math.max(20, Math.min(95, (averageSeverity / 3) * 100 + highCount * 6 + mediumCount * 2))
-      const affectedAreaPercent = Math.max(12, Math.min(90, 18 + defectCount * 7 + highCount * 6 + mediumCount * 3))
-      const urgencyLevel: 'routine' | 'priority' | 'critical' =
-        highCount >= 2 || severityScore >= 75 ? 'critical' : highCount >= 1 || severityScore >= 55 ? 'priority' : 'routine'
-      const recommendedScope: 'Basic' | 'Standard' | 'Comprehensive' =
-        severityScore >= 72 || defectCount >= 5 ? 'Comprehensive' : severityScore >= 48 ? 'Standard' : 'Basic'
-
-      return {
-        recommendedScope,
-        assessedDamageLevel,
-        affectedAreaPercent,
-        severityScore,
-        urgencyLevel,
-        confidenceMean,
-      }
-    }
-
-    const affectedAreaPercent = Math.max(5, Math.min(100, Number(signals.estimatedAffectedAreaPercent) || 5))
-    const severityScore = Math.max(0, Math.min(100, Number(signals.severityScore) || 0))
-
-    return {
-      recommendedScope: mapScope(signals.recommendedScope),
-      assessedDamageLevel: mapDamage(signals.assessedDamageLevel),
-      affectedAreaPercent,
-      severityScore,
-      urgencyLevel: signals.urgencyLevel,
-      confidenceMean,
-    }
-  }, [visionAnalysis])
-
-  const estimatedRetrofitAreaSqft = useMemo(
-    () => estimateRetrofitArea(structureType, visionAnalysis?.costSignals, visionAnalysis?.defects.length ?? 0),
-    [structureType, visionAnalysis?.costSignals, visionAnalysis?.defects.length],
-  )
-
-  const effectiveRetrofitAreaSqft = useMemo(() => {
-    if (Number.isFinite(retrofitAreaSqft) && retrofitAreaSqft >= 300) {
-      return Math.round(Math.max(300, Math.min(25000, retrofitAreaSqft)))
-    }
-    return estimatedRetrofitAreaSqft
-  }, [estimatedRetrofitAreaSqft, retrofitAreaSqft])
-
-  const retrofitEstimate = useMemo(() => {
-    const area = effectiveRetrofitAreaSqft
-
-    const scopeRate: Record<'Basic' | 'Standard' | 'Comprehensive', number> = {
-      Basic: 300,
-      Standard: 700,
-      Comprehensive: 1200,
-    }
-
-    const structureFactor: Record<string, number> = {
-      'Masonry House': 1,
-      'RC Frame': 1.2,
-      'School Block': 1.35,
-      'Bridge Approach': 1.5,
-    }
-
-    const damageFactor: Record<'Low' | 'Medium' | 'High', number> = {
-      Low: 1,
-      Medium: 1.2,
-      High: 1.45,
-    }
-
-    const urgencyFactor: Record<'routine' | 'priority' | 'critical', number> = {
-      routine: 1,
-      priority: 1.08,
-      critical: 1.18,
-    }
-
-    const cityRates = cityRateByProvince[selectedProvince]?.[retrofitCity] ?? {
-      laborDaily: 2600,
-      materialIndex: 1,
-      logisticsIndex: 1,
-      equipmentIndex: 1,
-    }
-    const laborFactor = cityRates.laborDaily / 2600
-    const materialFactor = cityRates.materialIndex
-    const logisticsFactor = cityRates.logisticsIndex
-    const locationFactor = laborFactor * 0.45 + materialFactor * 0.45 + logisticsFactor * 0.1
-
-    const effectiveScope = imageCostSignals?.recommendedScope ?? retrofitScope
-    const effectiveDamageLevel = imageCostSignals?.assessedDamageLevel ?? retrofitDamageLevel
-    const effectiveAreaFactor = imageCostSignals
-      ? Math.max(0.45, Math.min(1.2, imageCostSignals.affectedAreaPercent / 100 + 0.25))
-      : 1
-    const severityBoost = imageCostSignals ? 0.9 + (imageCostSignals.severityScore / 100) * 0.35 : 1
-    const urgencyBoost = imageCostSignals ? urgencyFactor[imageCostSignals.urgencyLevel] : 1
-
-    const provinceProfile = provinceRisk[selectedProvince]
-    const hazardFactor =
-      provinceProfile.earthquake === 'Very High' || provinceProfile.flood === 'Very High'
-        ? 1.15
-        : provinceProfile.earthquake === 'High' || provinceProfile.flood === 'High'
-          ? 1.08
-          : 1
-
-    const visibilityPenalty: Record<'excellent' | 'good' | 'fair' | 'poor', number> = {
-      excellent: 0.1,
-      good: 0.14,
-      fair: 0.2,
-      poor: 0.26,
-    }
-
-    const uncertaintySpread = imageCostSignals
-      ? Math.max(
-          0.12,
-          Math.min(0.35, visibilityPenalty[visionAnalysis?.imageQuality.visibility ?? 'good'] + (1 - imageCostSignals.confidenceMean) * 0.22),
-        )
-      : 0.18
-
-    const baseCost =
-      area *
-      scopeRate[effectiveScope] *
-      (structureFactor[structureType] ?? 1) *
-      damageFactor[effectiveDamageLevel] *
-      effectiveAreaFactor *
-      severityBoost *
-      urgencyBoost *
-      locationFactor
-    const adjustedCost = baseCost * hazardFactor
-    const contingency = adjustedCost * 0.12
-    const totalCost = adjustedCost + contingency
-    const durationWeeks = Math.max(
-      2,
-      Math.round((area / 450) * (effectiveScope === 'Comprehensive' ? 1.5 : effectiveScope === 'Standard' ? 1.15 : 0.85) * urgencyBoost),
-    )
-
-    const mlScope =
-      mlEstimate?.predictedScope === 'comprehensive'
-        ? 'Comprehensive'
-        : mlEstimate?.predictedScope === 'basic'
-          ? 'Basic'
-          : 'Standard'
-    const mlDamage =
-      mlEstimate?.predictedDamage === 'high' ? 'High' : mlEstimate?.predictedDamage === 'low' ? 'Low' : 'Medium'
-
-    const mlBaseCost = mlEstimate ? mlEstimate.predictedCostPerSqft * area : baseCost
-    const mlAdjustedCost = mlEstimate ? mlBaseCost * hazardFactor : adjustedCost
-    const mlContingency = mlEstimate ? mlAdjustedCost * 0.12 : contingency
-    const mlTotalCost = mlEstimate ? mlAdjustedCost + mlContingency : totalCost
-    const mlSpread = mlEstimate ? Math.max(0.1, Math.min(0.28, 0.22 - mlEstimate.confidence * 0.12)) : uncertaintySpread
-
-    return {
-      area,
-      baseCost: mlBaseCost,
-      adjustedCost: mlAdjustedCost,
-      contingency: mlContingency,
-      totalCost: mlTotalCost,
-      minTotalCost: mlTotalCost * (1 - mlSpread),
-      maxTotalCost: mlTotalCost * (1 + mlSpread),
-      durationWeeks: mlEstimate?.predictedDurationWeeks ?? durationWeeks,
-      sqftRate: mlTotalCost / area,
-      effectiveScope: mlEstimate ? mlScope : effectiveScope,
-      effectiveDamageLevel: mlEstimate ? mlDamage : effectiveDamageLevel,
-      estimateSource: mlEstimate ? 'ML Model' : imageCostSignals ? 'Image-driven' : 'Manual',
-      affectedAreaPercent: imageCostSignals?.affectedAreaPercent,
-      urgencyLevel: imageCostSignals?.urgencyLevel,
-      locationFactor,
-      laborDaily: cityRates.laborDaily,
-      materialIndex: cityRates.materialIndex,
-      logisticsIndex: cityRates.logisticsIndex,
-      equipmentIndex: deriveEquipmentIndex(cityRates),
-      mlConfidence: mlEstimate?.confidence,
-      mlModel: mlEstimate?.model,
-      mlGuidance: mlEstimate?.guidance ?? [],
-    }
-  }, [
-    retrofitScope,
-    structureType,
-    retrofitDamageLevel,
-    selectedProvince,
-    imageCostSignals,
-    visionAnalysis?.imageQuality.visibility,
-    retrofitCity,
-    mlEstimate,
-    effectiveRetrofitAreaSqft,
-  ])
-
-  const toolkit = {
-    seismicLoad: selectedProvince === 'GB' || selectedProvince === 'KP' ? 0.36 : 0.24,
-    floodElevation: selectedProvince === 'Sindh' ? 2.8 : 1.9,
-    safeFoundationHeight: selectedProvince === 'Sindh' ? 3.4 : 2.3,
-    vulnerabilityScore: selectedRole === 'Engineer / Planner' ? 42 : 58,
-    retrofittingTechnique:
-      structureType === 'Masonry House' ? 'Steel mesh + shotcrete jacketing' : 'Column jacketing + shear walls',
-  }
-
   const isQuotaError = useCallback(
     (message: string): boolean =>
       /\b429\b|\b422\b|quota|insufficient_quota|billing|rate\s*limit|requested model|not supported by any provider|provider you have enabled|unsupported model|unprocessable|status code \(no body\)/i.test(
@@ -2289,336 +2106,385 @@ function App() {
     [],
   )
 
-  const runMlRetrofitGuidance = useCallback(
-    async (input?: {
-      costSignals?: VisionAnalysisResult['costSignals']
-      defects?: VisionAnalysisResult['defects']
-      imageQuality?: VisionAnalysisResult['imageQuality']['visibility']
-      source?: 'post-ai' | 'fallback' | 'manual'
-    }): Promise<MlRetrofitEstimate | null> => {
-      setIsGeneratingMlGuidance(true)
-
-      try {
-        const cityRates = cityRateByProvince[selectedProvince]?.[retrofitCity] ?? {
-          laborDaily: 2600,
-          materialIndex: 1,
-          logisticsIndex: 1,
-          equipmentIndex: 1,
-        }
-
-        const defects = input?.defects ?? visionAnalysis?.defects ?? []
-        const fallbackSeverityScore = defects.length
-          ? Math.round(
-              (defects.reduce(
-                (sum, defect) =>
-                  sum + (defect.severity === 'high' ? 85 : defect.severity === 'medium' ? 60 : 35) * defect.confidence,
-                0,
-              ) /
-                defects.length) *
-                1.1,
-            )
-          : retrofitImageInsights?.quality === 'Poor'
-            ? 72
-            : retrofitImageInsights?.quality === 'Fair'
-              ? 56
-              : 42
-
-        const defectProfile = defects.reduce(
-          (acc, defect) => {
-            acc[defect.type] = (acc[defect.type] ?? 0) + 1
-            return acc
-          },
-          {} as Partial<Record<'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other', number>>,
-        )
-
-        const qualityFromUpload =
-          retrofitImageInsights?.quality === 'Excellent'
-            ? 'excellent'
-            : retrofitImageInsights?.quality === 'Fair'
-              ? 'fair'
-              : retrofitImageInsights?.quality === 'Poor'
-                ? 'poor'
-                : 'good'
-
-        const ml = await getMlRetrofitEstimate({
-          structureType,
-          province: selectedProvince,
-          city: retrofitCity,
-          areaSqft: effectiveRetrofitAreaSqft,
-          severityScore: input?.costSignals?.severityScore ?? fallbackSeverityScore,
-          affectedAreaPercent: input?.costSignals?.estimatedAffectedAreaPercent ?? Math.min(85, 18 + defects.length * 8),
-          urgencyLevel:
-            input?.costSignals?.urgencyLevel ?? (defects.some((defect) => defect.severity === 'high') ? 'critical' : 'priority'),
-          laborDaily: cityRates.laborDaily,
-          materialIndex: cityRates.materialIndex,
-          equipmentIndex: deriveEquipmentIndex(cityRates),
-          logisticsIndex: cityRates.logisticsIndex,
-          defectProfile,
-          imageQuality: input?.imageQuality ?? qualityFromUpload,
-        })
-
-        setMlEstimate(ml)
-        if (input?.source === 'fallback') {
-          setRetrofitError('AI is temporarily unavailable. Pakistan ML retrofit guidance is active.')
-        } else if (input?.source === 'manual') {
-          setRetrofitError(null)
-        }
-        return ml
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'ML retrofit guidance failed.'
-        setMlEstimate(null)
-        setRetrofitError(
-          input?.source === 'fallback'
-            ? 'AI is unavailable and ML fallback is temporarily unavailable. Please verify OpenAI billing/limits and try again shortly.'
-            : message,
-        )
-        return null
-      } finally {
-        setIsGeneratingMlGuidance(false)
-      }
-    },
-    [selectedProvince, retrofitCity, visionAnalysis?.defects, retrofitImageInsights, structureType, effectiveRetrofitAreaSqft],
-  )
-
-  const analyzeRetrofitImage = async (file: File) => {
-    setIsAnalyzingImage(true)
-    setRetrofitError(null)
-    setVisionAnalysis(null)
-    setMlEstimate(null)
-
-    try {
-      if (!retrofitCity.trim()) {
-        throw new Error('Please enter city/district location in Pakistan before image upload.')
-      }
-
-      const imageUrl = URL.createObjectURL(file)
-      setRetrofitImagePreview(imageUrl)
-
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => resolve(img)
-        img.onerror = () => reject(new Error('Unable to read the uploaded image.'))
-        img.src = imageUrl
-      })
-
-      const canvas = document.createElement('canvas')
-      const maxWidth = 900
-      const ratio = image.width > maxWidth ? maxWidth / image.width : 1
-      const width = Math.max(1, Math.round(image.width * ratio))
-      const height = Math.max(1, Math.round(image.height * ratio))
-
-      canvas.width = width
-      canvas.height = height
-
-      const context = canvas.getContext('2d')
-      if (!context) {
-        throw new Error('Image analysis context unavailable.')
-      }
-
-      context.drawImage(image, 0, 0, width, height)
-      const imageData = context.getImageData(0, 0, width, height).data
-
-      let graySum = 0
-      let graySquaredSum = 0
-      let edgeSum = 0
-      let pixelCount = 0
-
-      for (let index = 0; index < imageData.length; index += 4) {
-        const red = imageData[index]
-        const green = imageData[index + 1]
-        const blue = imageData[index + 2]
-        const gray = red * 0.299 + green * 0.587 + blue * 0.114
-        graySum += gray
-        graySquaredSum += gray * gray
-        pixelCount += 1
-
-        if (index >= 4) {
-          const prevRed = imageData[index - 4]
-          const prevGreen = imageData[index - 3]
-          const prevBlue = imageData[index - 2]
-          const prevGray = prevRed * 0.299 + prevGreen * 0.587 + prevBlue * 0.114
-          edgeSum += Math.abs(gray - prevGray)
-        }
-      }
-
-      const meanGray = graySum / pixelCount
-      const variance = Math.max(0, graySquaredSum / pixelCount - meanGray * meanGray)
-      const stdDev = Math.sqrt(variance)
-      const sharpness = edgeSum / pixelCount
-
-      let quality: ImageInsights['quality'] = 'Good'
-      if (width < 700 || height < 500 || stdDev < 28 || sharpness < 9) quality = 'Fair'
-      if (width < 500 || height < 350 || stdDev < 18 || sharpness < 6 || meanGray < 45 || meanGray > 215) {
-        quality = 'Poor'
-      }
-      if (width > 1200 && height > 800 && stdDev > 45 && sharpness > 13 && meanGray >= 70 && meanGray <= 190) {
-        quality = 'Excellent'
-      }
-
-      setRetrofitImageInsights({
-        width,
-        height,
-        brightness: meanGray,
-        contrast: stdDev,
-        sharpness,
-        quality,
-      })
-
-      const riskProfile = provinceRisk[selectedProvince]
-      const riskText = `earthquake=${riskProfile.earthquake}, flood=${riskProfile.flood}, landslide=${riskProfile.landslide}`
-
-      const analysis = await analyzeBuildingWithVision({
-        image: file,
-        structureType,
-        province: selectedProvince,
-        location: `${retrofitCity}, ${selectedProvince}, Pakistan`,
-        riskProfile: riskText,
-      })
-
-      setVisionAnalysis(analysis)
-
-      if (analysis.costSignals) {
-        const detectedDamage =
-          analysis.costSignals.assessedDamageLevel === 'high'
-            ? 'High'
-            : analysis.costSignals.assessedDamageLevel === 'low'
-              ? 'Low'
-              : 'Medium'
-        const detectedScope =
-          analysis.costSignals.recommendedScope === 'comprehensive'
-            ? 'Comprehensive'
-            : analysis.costSignals.recommendedScope === 'basic'
-              ? 'Basic'
-              : 'Standard'
-
-        setRetrofitDamageLevel(detectedDamage)
-        setRetrofitScope(detectedScope)
-      }
-
-      await runMlRetrofitGuidance({
-        costSignals: analysis.costSignals,
-        defects: analysis.defects,
-        imageQuality: analysis.imageQuality.visibility,
-        source: 'post-ai',
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Image analysis failed.'
-      if (isQuotaError(message)) {
-        setVisionAnalysis(null)
-        await runMlRetrofitGuidance({ source: 'fallback' })
-      } else {
-        setRetrofitError(message)
-        setRetrofitImageInsights(null)
-        setVisionAnalysis(null)
-        setMlEstimate(null)
-      }
-    } finally {
-      setIsAnalyzingImage(false)
-    }
-  }
-
-  const saveRetrofitTrainingData = async () => {
-    if (!retrofitImageFile) {
-      setRetrofitError('Upload a building photo first to save training data.')
+  const handleRetrofitSeriesUpload = (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      setRetrofitImageSeriesFiles([])
+      setRetrofitImageSeriesPreviewUrls([])
+      setRetrofitImageSeriesResults([])
+      setRetrofitFinalEstimate(null)
       return
     }
 
-    setIsSavingTrainingData(true)
-    setTrainingDataStatus(null)
+    const nextFiles = Array.from(files)
+    const nextPreviews = nextFiles.map((file) => URL.createObjectURL(file))
+
+    retrofitImageSeriesPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+    setRetrofitImageSeriesFiles(nextFiles)
+    setRetrofitImageSeriesPreviewUrls(nextPreviews)
+    setRetrofitImageSeriesResults([])
+    setRetrofitFinalEstimate(null)
+    setRetrofitError(null)
+  }
+
+  const calculateRetrofitEstimateFromSeries = async () => {
+    if (retrofitImageSeriesFiles.length === 0) {
+      setRetrofitError('Upload one or more building defect photos before calculating.')
+      return
+    }
+
+    if (!Number.isFinite(retrofitAreaSqft) || retrofitAreaSqft < 300) {
+      setRetrofitError('Enter a valid construction area (minimum 300 sq ft).')
+      return
+    }
+
+    const locationProvince = retrofitLocationMode === 'manual' ? retrofitManualProvince : selectedProvince
+    const locationCity =
+      retrofitLocationMode === 'manual'
+        ? retrofitManualCity
+        : retrofitCity || pakistanCitiesByProvince[selectedProvince]?.[0] || 'Lahore'
+
+    if (!locationProvince || !locationCity) {
+      setRetrofitError('Select a valid Pakistan province and city/district.')
+      return
+    }
+
+    setIsCalculatingRetrofitEstimate(true)
+    setRetrofitError(null)
+    setMlEstimate(null)
+    setVisionAnalysis(null)
+    setRetrofitImageSeriesResults([])
+    setRetrofitFinalEstimate(null)
 
     try {
-      const cityRates = cityRateByProvince[selectedProvince]?.[retrofitCity] ?? {
+      const provinceProfile = provinceRisk[locationProvince] ?? provinceRisk.Punjab
+      const cityRates = cityRateByProvince[locationProvince]?.[locationCity] ?? {
         laborDaily: 2600,
         materialIndex: 1,
         logisticsIndex: 1,
         equipmentIndex: 1,
       }
+      const equipmentIndex = deriveEquipmentIndex(cityRates)
+      const laborFactor = cityRates.laborDaily / 2600
+      const locationFactor = laborFactor * 0.45 + cityRates.materialIndex * 0.45 + cityRates.logisticsIndex * 0.1
 
-      const response = await uploadRetrofitTrainingData({
-        image: retrofitImageFile,
-        structureType,
-        province: selectedProvince,
-        city: retrofitCity,
-        areaSqft: effectiveRetrofitAreaSqft,
-        severityScore: imageCostSignals?.severityScore ?? 45,
-        affectedAreaPercent: imageCostSignals?.affectedAreaPercent ?? 25,
-        urgencyLevel: imageCostSignals?.urgencyLevel ?? 'priority',
+      const storyFactor = Math.max(1, 1 + (Math.max(1, Math.round(retrofitStories)) - 1) * 0.18)
+      const totalAreaSqft = Math.round(
+        Math.max(300, Math.min(50000, retrofitAreaSqft)) * Math.max(1, Math.round(retrofitStories)),
+      )
+      const perImageAreaSqft = Math.max(220, Math.round(totalAreaSqft / retrofitImageSeriesFiles.length))
+
+      const structureFactor: Record<string, number> = {
+        'Masonry House': 1,
+        'RC Frame': 1.2,
+        'School Block': 1.35,
+        'Bridge Approach': 1.5,
+      }
+      const damageFactor: Record<'Low' | 'Medium' | 'High', number> = {
+        Low: 1,
+        Medium: 1.22,
+        High: 1.48,
+      }
+      const scopeRate: Record<'Basic' | 'Standard' | 'Comprehensive', number> = {
+        Basic: 320,
+        Standard: 740,
+        Comprehensive: 1250,
+      }
+
+      const mapScope = (scope: 'basic' | 'standard' | 'comprehensive'): 'Basic' | 'Standard' | 'Comprehensive' => {
+        if (scope === 'basic') return 'Basic'
+        if (scope === 'comprehensive') return 'Comprehensive'
+        return 'Standard'
+      }
+
+      const mapDamage = (level: 'low' | 'medium' | 'high'): 'Low' | 'Medium' | 'High' => {
+        if (level === 'low') return 'Low'
+        if (level === 'high') return 'High'
+        return 'Medium'
+      }
+
+      const visibilityPenalty: Record<'excellent' | 'good' | 'fair' | 'poor', number> = {
+        excellent: 0.1,
+        good: 0.14,
+        fair: 0.2,
+        poor: 0.26,
+      }
+
+      const hazardFactor =
+        provinceProfile.earthquake === 'Very High' || provinceProfile.flood === 'Very High'
+          ? 1.15
+          : provinceProfile.earthquake === 'High' || provinceProfile.flood === 'High'
+            ? 1.08
+            : 1
+
+      const defectProfileTotals: Partial<
+        Record<'crack' | 'spalling' | 'corrosion' | 'moisture' | 'deformation' | 'other', number>
+      > = {}
+      const imageResults: RetrofitImageSeriesResult[] = []
+      let severityAccumulator = 0
+      let affectedAccumulator = 0
+      let uncertaintyAccumulator = 0
+
+      for (let index = 0; index < retrofitImageSeriesFiles.length; index += 1) {
+        const file = retrofitImageSeriesFiles[index]
+        const previewUrl = retrofitImageSeriesPreviewUrls[index] ?? URL.createObjectURL(file)
+
+        try {
+          const analysis = await analyzeBuildingWithVision({
+            image: file,
+            structureType,
+            province: locationProvince,
+            location: `${locationCity}, ${locationProvince}, Pakistan`,
+            riskProfile: `earthquake=${provinceProfile.earthquake}, flood=${provinceProfile.flood}, landslide=${provinceProfile.landslide}`,
+          })
+
+          if (index === 0) {
+            setVisionAnalysis(analysis)
+          }
+
+          const defects = analysis.defects ?? []
+          defects.forEach((defect) => {
+            defectProfileTotals[defect.type] = (defectProfileTotals[defect.type] ?? 0) + 1
+          })
+
+          const inferredSeverityScore = defects.length
+            ? Math.round(
+                defects.reduce(
+                  (sum, defect) =>
+                    sum + (defect.severity === 'high' ? 85 : defect.severity === 'medium' ? 60 : 35) * defect.confidence,
+                  0,
+                ) / defects.length,
+              )
+            : 42
+
+          const inferredAffectedAreaPercent = Math.max(
+            12,
+            Math.min(90, 18 + defects.length * 7 + defects.filter((defect) => defect.severity === 'high').length * 8),
+          )
+
+          const scoreSignals = analysis.costSignals
+          const severityScore = Math.max(0, Math.min(100, Number(scoreSignals?.severityScore) || inferredSeverityScore))
+          const affectedAreaPercent = Math.max(
+            8,
+            Math.min(100, Number(scoreSignals?.estimatedAffectedAreaPercent) || inferredAffectedAreaPercent),
+          )
+
+          const qualityVisibility = analysis.imageQuality.visibility
+          const recommendedScope = scoreSignals ? mapScope(scoreSignals.recommendedScope) : severityScore >= 72 ? 'Comprehensive' : severityScore >= 48 ? 'Standard' : 'Basic'
+          const damageLevel = scoreSignals
+            ? mapDamage(scoreSignals.assessedDamageLevel)
+            : severityScore >= 72
+              ? 'High'
+              : severityScore >= 45
+                ? 'Medium'
+                : 'Low'
+          const urgencyLevel = scoreSignals
+            ? scoreSignals.urgencyLevel
+            : severityScore >= 72
+              ? 'critical'
+              : severityScore >= 48
+                ? 'priority'
+                : 'routine'
+
+          const urgencyBoost: Record<'routine' | 'priority' | 'critical', number> = {
+            routine: 1,
+            priority: 1.08,
+            critical: 1.18,
+          }
+
+          const baseCost =
+            perImageAreaSqft *
+            scopeRate[recommendedScope] *
+            (structureFactor[structureType] ?? 1) *
+            damageFactor[damageLevel] *
+            (0.92 + (severityScore / 100) * 0.34) *
+            Math.max(0.45, Math.min(1.2, affectedAreaPercent / 100 + 0.25)) *
+            urgencyBoost[urgencyLevel] *
+            locationFactor *
+            storyFactor
+
+          const estimatedCost = baseCost * hazardFactor * 1.12
+
+          imageResults.push({
+            id: `${Date.now()}-${index}-${file.name}`,
+            fileName: file.name,
+            previewUrl,
+            summary: analysis.summary,
+            defectCount: defects.length,
+            severityScore,
+            affectedAreaPercent,
+            estimatedCost,
+            recommendedScope,
+            damageLevel,
+            urgencyLevel,
+            visibility: qualityVisibility,
+          })
+
+          severityAccumulator += severityScore
+          affectedAccumulator += affectedAreaPercent
+          uncertaintyAccumulator += visibilityPenalty[qualityVisibility]
+        } catch (error) {
+          const fallbackMessage = error instanceof Error ? error.message : 'Image analysis failed'
+          if (!isQuotaError(fallbackMessage)) {
+            throw error
+          }
+
+          const fallbackSignals = {
+            severityScore: 55,
+            affectedAreaPercent: 30,
+            urgencyLevel: 'priority' as const,
+            recommendedScope: 'Standard' as const,
+            damageLevel: 'Medium' as const,
+            visibility: 'good' as const,
+          }
+
+          const fallbackBase =
+            perImageAreaSqft *
+            scopeRate[fallbackSignals.recommendedScope] *
+            (structureFactor[structureType] ?? 1) *
+            damageFactor[fallbackSignals.damageLevel] *
+            locationFactor *
+            storyFactor
+          const fallbackCost = fallbackBase * hazardFactor * 1.12
+
+          imageResults.push({
+            id: `${Date.now()}-${index}-${file.name}`,
+            fileName: file.name,
+            previewUrl,
+            summary: 'AI unavailable for this image. ML-ready fallback assumptions applied.',
+            defectCount: 0,
+            severityScore: fallbackSignals.severityScore,
+            affectedAreaPercent: fallbackSignals.affectedAreaPercent,
+            estimatedCost: fallbackCost,
+            recommendedScope: fallbackSignals.recommendedScope,
+            damageLevel: fallbackSignals.damageLevel,
+            urgencyLevel: fallbackSignals.urgencyLevel,
+            visibility: fallbackSignals.visibility,
+          })
+
+          severityAccumulator += fallbackSignals.severityScore
+          affectedAccumulator += fallbackSignals.affectedAreaPercent
+          uncertaintyAccumulator += visibilityPenalty[fallbackSignals.visibility]
+        }
+      }
+
+      if (imageResults.length === 0) {
+        throw new Error('No valid image analysis result generated. Please upload clearer images and retry.')
+      }
+
+      setRetrofitImageSeriesResults(imageResults)
+
+      const avgSeverityScore = Math.round(severityAccumulator / imageResults.length)
+      const avgAffectedAreaPercent = Math.round(affectedAccumulator / imageResults.length)
+      const avgUncertaintyPenalty = uncertaintyAccumulator / imageResults.length
+      const highestUrgency = imageResults.some((item) => item.urgencyLevel === 'critical')
+        ? 'critical'
+        : imageResults.some((item) => item.urgencyLevel === 'priority')
+          ? 'priority'
+          : 'routine'
+
+      const highCount = imageResults.filter((item) => item.damageLevel === 'High').length
+      const lowCount = imageResults.filter((item) => item.damageLevel === 'Low').length
+      const aggregateDamageLevel: 'Low' | 'Medium' | 'High' =
+        highCount >= Math.ceil(imageResults.length / 2)
+          ? 'High'
+          : lowCount >= Math.ceil(imageResults.length / 2)
+            ? 'Low'
+            : 'Medium'
+
+      const aggregateScope: 'Basic' | 'Standard' | 'Comprehensive' =
+        avgSeverityScore >= 72 ? 'Comprehensive' : avgSeverityScore >= 48 ? 'Standard' : 'Basic'
+
+      let ml: MlRetrofitEstimate | null = null
+
+      try {
+        ml = await getMlRetrofitEstimate({
+          structureType,
+          province: locationProvince,
+          city: locationCity,
+          areaSqft: totalAreaSqft,
+          severityScore: avgSeverityScore,
+          affectedAreaPercent: avgAffectedAreaPercent,
+          urgencyLevel: highestUrgency,
+          laborDaily: cityRates.laborDaily,
+          materialIndex: cityRates.materialIndex,
+          equipmentIndex,
+          logisticsIndex: cityRates.logisticsIndex,
+          defectProfile: defectProfileTotals,
+          imageQuality: avgUncertaintyPenalty >= 0.22 ? 'poor' : avgUncertaintyPenalty >= 0.18 ? 'fair' : 'good',
+        })
+
+        setMlEstimate(ml)
+      } catch {
+        ml = null
+        setMlEstimate(null)
+      }
+
+      const baseRateFromImages = imageResults.reduce((sum, item) => sum + item.estimatedCost, 0) / totalAreaSqft
+      const mlBaseRate = ml?.predictedCostPerSqft ?? baseRateFromImages
+      const adjustedBase = mlBaseRate * totalAreaSqft
+      const hazardAdjusted = adjustedBase * hazardFactor
+      const contingency = hazardAdjusted * 0.12
+      const totalCost = hazardAdjusted + contingency
+
+      const spread = ml
+        ? Math.max(0.1, Math.min(0.28, 0.22 - ml.confidence * 0.12))
+        : Math.max(0.12, Math.min(0.34, avgUncertaintyPenalty + 0.1))
+
+      const estimatedDuration = ml?.predictedDurationWeeks
+        ? ml.predictedDurationWeeks
+        : Math.max(2, Math.round((totalAreaSqft / 470) * storyFactor * (aggregateScope === 'Comprehensive' ? 1.4 : aggregateScope === 'Standard' ? 1.1 : 0.9)))
+
+      const finalScope: 'Basic' | 'Standard' | 'Comprehensive' = ml
+        ? ml.predictedScope === 'comprehensive'
+          ? 'Comprehensive'
+          : ml.predictedScope === 'basic'
+            ? 'Basic'
+            : 'Standard'
+        : aggregateScope
+
+      const finalDamage: 'Low' | 'Medium' | 'High' = ml
+        ? ml.predictedDamage === 'high'
+          ? 'High'
+          : ml.predictedDamage === 'low'
+            ? 'Low'
+            : 'Medium'
+        : aggregateDamageLevel
+
+      setRetrofitFinalEstimate({
+        estimateSource: ml ? 'ML Model' : 'Image-driven',
+        province: locationProvince,
+        city: locationCity,
+        stories: Math.max(1, Math.round(retrofitStories)),
+        imageCount: imageResults.length,
+        totalAreaSqft,
+        durationWeeks: estimatedDuration,
+        totalCost,
+        minTotalCost: totalCost * (1 - spread),
+        maxTotalCost: totalCost * (1 + spread),
+        sqftRate: totalCost / totalAreaSqft,
+        locationFactor,
         laborDaily: cityRates.laborDaily,
         materialIndex: cityRates.materialIndex,
-        equipmentIndex: deriveEquipmentIndex(cityRates),
         logisticsIndex: cityRates.logisticsIndex,
+        equipmentIndex,
+        scope: finalScope,
+        damageLevel: finalDamage,
+        urgencyLevel: highestUrgency,
+        affectedAreaPercent: avgAffectedAreaPercent,
+        severityScore: avgSeverityScore,
+        mlModel: ml?.model,
+        mlConfidence: ml?.confidence,
+        guidance: ml?.guidance ?? imageResults.flatMap((item) => [`${item.fileName}: ${item.summary}`]),
       })
-
-      setTrainingDataStatus(`${response.message} Total samples: ${response.sampleCount}.`)
-      setRetrofitError(null)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save training data.'
+      const message = error instanceof Error ? error.message : 'Retrofit estimate calculation failed.'
       setRetrofitError(message)
+      setRetrofitImageSeriesResults([])
+      setRetrofitFinalEstimate(null)
     } finally {
-      setIsSavingTrainingData(false)
+      setIsCalculatingRetrofitEstimate(false)
     }
   }
-
-  const trainRetrofitMlModelFromData = async () => {
-    setIsTrainingMlModel(true)
-    setTrainingDataStatus(null)
-
-    try {
-      const result = await retrainRetrofitModel()
-      setTrainingDataStatus(`${result.message} User samples: ${result.userRows}, total rows: ${result.totalRows}, model: ${result.modelVersion}.`)
-      setRetrofitError(null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to train ML model.'
-      setRetrofitError(message)
-    } finally {
-      setIsTrainingMlModel(false)
-    }
-  }
-
-  const retrofitAiGuidelines = useMemo(() => {
-    if (visionAnalysis) {
-      const modelGuidelines = [...visionAnalysis.priorityActions]
-      const immediate = visionAnalysis.retrofitPlan.immediate.map((item) => `Immediate: ${item}`)
-      const shortTerm = visionAnalysis.retrofitPlan.shortTerm.map((item) => `Short-term: ${item}`)
-      const longTerm = visionAnalysis.retrofitPlan.longTerm.map((item) => `Long-term: ${item}`)
-      return [...modelGuidelines, ...immediate, ...shortTerm, ...longTerm]
-    }
-
-    if (!retrofitImageInsights) return []
-
-    const guidelines: string[] = []
-    const provinceProfile = provinceRisk[selectedProvince]
-
-    if (retrofitImageInsights.quality === 'Poor' || retrofitImageInsights.quality === 'Fair') {
-      guidelines.push('Retake a clearer front + side photo in daylight so cracks, joints, and damp zones are visible.')
-    }
-
-    if (structureType === 'Masonry House') {
-      guidelines.push('Prioritize wall-to-roof anchorage, lintel bands, and mesh jacketing at cracked wall segments.')
-    }
-    if (structureType === 'RC Frame') {
-      guidelines.push('Check soft-story behavior and apply column jacketing with confinement reinforcement at critical bays.')
-    }
-    if (structureType === 'School Block') {
-      guidelines.push('Strengthen evacuation corridors, stair cores, and parapet anchorage for life-safety compliance.')
-    }
-    if (structureType === 'Bridge Approach') {
-      guidelines.push('Stabilize embankment slope, improve drainage, and reinforce approach slab transition zones.')
-    }
-
-    if (provinceProfile.earthquake === 'High' || provinceProfile.earthquake === 'Very High') {
-      guidelines.push('Use seismic detailing upgrades: ductile ties, shear-wall insertion, and out-of-plane wall restraints.')
-    }
-    if (provinceProfile.flood === 'High' || provinceProfile.flood === 'Very High') {
-      guidelines.push('Add flood retrofit package: plinth elevation, water-resistant finishes, and backflow protection.')
-    }
-    if (provinceProfile.landslide === 'High') {
-      guidelines.push('For slope-prone zones, include retaining systems, toe protection, and sub-surface drainage.')
-    }
-
-    guidelines.push(`Recommended primary technique: ${toolkit.retrofittingTechnique}.`)
-    return guidelines
-  }, [retrofitImageInsights, selectedProvince, structureType, toolkit.retrofittingTechnique, visionAnalysis])
 
   const savePreferences = (offline: boolean, lightweight: boolean) => {
     localStorage.setItem('r360-offline', String(offline))
@@ -2644,49 +2510,52 @@ function App() {
   }
 
   const downloadRetrofitEstimate = () => {
+    if (!retrofitFinalEstimate) {
+      setRetrofitError('Calculate retrofit estimate first, then download the report.')
+      return
+    }
+
     const doc = new jsPDF()
-    const provinceProfile = provinceRisk[selectedProvince]
-    const defectCount = visionAnalysis?.defects.length ?? 0
+    const provinceProfile = provinceRisk[retrofitFinalEstimate.province] ?? provinceRisk.Punjab
+    const defectCount = retrofitImageSeriesResults.reduce((sum, item) => sum + item.defectCount, 0)
 
     doc.setFontSize(16)
     doc.text('Resilience360 Retrofit Estimate', 14, 18)
     doc.setFontSize(11)
     doc.text(`Date: ${new Date().toLocaleString()}`, 14, 28)
-    doc.text(`Province: ${selectedProvince}`, 14, 36)
-    doc.text(`City/District: ${retrofitCity}`, 14, 44)
+    doc.text(`Province: ${retrofitFinalEstimate.province}`, 14, 36)
+    doc.text(`City/District: ${retrofitFinalEstimate.city}`, 14, 44)
     doc.text(`Structure Type: ${structureType}`, 14, 52)
-    doc.text(`Estimate Source: ${retrofitEstimate.estimateSource}`, 14, 60)
-    doc.text(`Retrofit Scope: ${retrofitEstimate.effectiveScope}`, 14, 68)
-    doc.text(`Defect Severity: ${retrofitEstimate.effectiveDamageLevel}`, 14, 76)
-    doc.text(`Area: ${retrofitEstimate.area.toLocaleString()} sq ft`, 14, 84)
-    doc.text(`Estimated Duration: ${retrofitEstimate.durationWeeks} weeks`, 14, 92)
-    doc.text(`Location Cost Factor: ${retrofitEstimate.locationFactor.toFixed(2)}x`, 14, 100)
-    doc.text(`Base Cost: PKR ${Math.round(retrofitEstimate.baseCost).toLocaleString()}`, 14, 108)
-    doc.text(`Hazard Adjusted: PKR ${Math.round(retrofitEstimate.adjustedCost).toLocaleString()}`, 14, 116)
-    doc.text(`Contingency (12%): PKR ${Math.round(retrofitEstimate.contingency).toLocaleString()}`, 14, 124)
-    doc.text(`Estimated Total: PKR ${Math.round(retrofitEstimate.totalCost).toLocaleString()}`, 14, 132)
+    doc.text(`Estimate Source: ${retrofitFinalEstimate.estimateSource}`, 14, 60)
+    doc.text(`Retrofit Scope: ${retrofitFinalEstimate.scope}`, 14, 68)
+    doc.text(`Defect Severity: ${retrofitFinalEstimate.damageLevel}`, 14, 76)
+    doc.text(`Stories: ${retrofitFinalEstimate.stories}`, 14, 84)
+    doc.text(`Analyzed Photos: ${retrofitFinalEstimate.imageCount}`, 14, 92)
+    doc.text(`Area: ${retrofitFinalEstimate.totalAreaSqft.toLocaleString()} sq ft`, 14, 100)
+    doc.text(`Estimated Duration: ${retrofitFinalEstimate.durationWeeks} weeks`, 14, 108)
+    doc.text(`Location Cost Factor: ${retrofitFinalEstimate.locationFactor.toFixed(2)}x`, 14, 116)
+    doc.text(`Estimated Total: PKR ${Math.round(retrofitFinalEstimate.totalCost).toLocaleString()}`, 14, 124)
     doc.text(
-      `Image-based Range: PKR ${Math.round(retrofitEstimate.minTotalCost).toLocaleString()} - PKR ${Math.round(retrofitEstimate.maxTotalCost).toLocaleString()}`,
+      `Estimated Range: PKR ${Math.round(retrofitFinalEstimate.minTotalCost).toLocaleString()} - PKR ${Math.round(retrofitFinalEstimate.maxTotalCost).toLocaleString()}`,
       14,
-      140,
+      132,
     )
-    doc.text(`Effective Rate: PKR ${Math.round(retrofitEstimate.sqftRate).toLocaleString()}/sq ft`, 14, 148)
-    if (retrofitEstimate.affectedAreaPercent) {
-      doc.text(`Affected Area (from image): ${Math.round(retrofitEstimate.affectedAreaPercent)}%`, 14, 156)
-    }
-    if (retrofitEstimate.urgencyLevel) {
-      doc.text(`Urgency (from image): ${retrofitEstimate.urgencyLevel}`, 14, 164)
-    }
+    doc.text(`Effective Rate: PKR ${Math.round(retrofitFinalEstimate.sqftRate).toLocaleString()}/sq ft`, 14, 140)
+    doc.text(`Affected Area (average): ${Math.round(retrofitFinalEstimate.affectedAreaPercent)}%`, 14, 148)
+    doc.text(`Urgency: ${retrofitFinalEstimate.urgencyLevel}`, 14, 156)
 
-    doc.text('Hazard Profile:', 14, 176)
-    doc.text(`- Earthquake: ${provinceProfile.earthquake}`, 18, 184)
-    doc.text(`- Flood: ${provinceProfile.flood}`, 18, 192)
-    doc.text(`- Landslide: ${provinceProfile.landslide}`, 18, 200)
+    doc.text('Hazard Profile:', 14, 168)
+    doc.text(`- Earthquake: ${provinceProfile.earthquake}`, 18, 176)
+    doc.text(`- Flood: ${provinceProfile.flood}`, 18, 184)
+    doc.text(`- Landslide: ${provinceProfile.landslide}`, 18, 192)
 
-    const summary = visionAnalysis?.summary ?? 'No model summary available. Estimate based on calculator inputs.'
+    const summary =
+      retrofitImageSeriesResults[0]?.summary ??
+      visionAnalysis?.summary ??
+      'No model summary available. Estimate based on uploaded image series and calculator inputs.'
     const clippedSummary = summary.length > 110 ? `${summary.slice(0, 107)}...` : summary
-    doc.text(`Model Summary: ${clippedSummary}`, 14, 212)
-    doc.text(`Detected Defects: ${defectCount}`, 14, 220)
+    doc.text(`Model Summary: ${clippedSummary}`, 14, 204)
+    doc.text(`Detected Defects: ${defectCount}`, 14, 212)
 
     const filename = `resilience360-retrofit-estimate-${Date.now()}.pdf`
     doc.save(filename)
@@ -4843,315 +4712,256 @@ function App() {
       return (
         <div className="panel section-panel section-retrofit">
           <h2>{t.sections.retrofit}</h2>
-          <label>
-            Construction Type
-            <select value={structureType} onChange={(event) => setStructureType(event.target.value)}>
-              <option>Masonry House</option>
-              <option>RC Frame</option>
-              <option>School Block</option>
-              <option>Bridge Approach</option>
-            </select>
-          </label>
-          <label>
-            Construction Area (sq ft)
-            <input
-              type="number"
-              min={300}
-              step={50}
-              value={retrofitAreaSqft}
-              onChange={(event) => setRetrofitAreaSqft(Number(event.target.value) || 0)}
-            />
-          </label>
           <div className="inline-controls">
             <label>
-              Province (Pakistan)
-              <select
-                value={selectedProvince}
-                onChange={(event) => {
-                  const province = event.target.value
-                  setSelectedProvince(province)
-                  setRetrofitCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
-                }}
-              >
-                {Object.keys(provinceRisk).map((province) => (
-                  <option key={province}>{province}</option>
-                ))}
-              </select>
-              </label>
-            <label>
-              City / District (Pakistan)
-              <select
-                value={retrofitCity}
-                onChange={(event) => setRetrofitCity(event.target.value)}
-              >
-                {availableRetrofitCities.map((city) => (
-                  <option key={city}>{city}</option>
-                ))}
+              Construction Type
+              <select value={structureType} onChange={(event) => setStructureType(event.target.value)}>
+                <option>Masonry House</option>
+                <option>RC Frame</option>
+                <option>School Block</option>
+                <option>Bridge Approach</option>
               </select>
             </label>
+            <label>
+              Number of Stories
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={retrofitStories}
+                onChange={(event) => setRetrofitStories(Math.max(1, Math.min(12, Number(event.target.value) || 1)))}
+              />
+            </label>
+            <label>
+              Built-up Area per Story (sq ft)
+              <input
+                type="number"
+                min={300}
+                step={50}
+                value={retrofitAreaSqft}
+                onChange={(event) => setRetrofitAreaSqft(Number(event.target.value) || 0)}
+              />
+            </label>
           </div>
+
+          <div className="retrofit-model-output">
+            <h3>Location for Labor/Material Rates</h3>
+            <div className="retrofit-action-row" role="group" aria-label="Retrofit location mode">
+              <button
+                type="button"
+                onClick={() => {
+                  setRetrofitLocationMode('auto')
+                  requestCurrentUserLocation()
+                }}
+                disabled={isDetectingLocation}
+              >
+                {isDetectingLocation ? '📡 Detecting Location...' : '📡 Use My Location'}
+              </button>
+              <button type="button" onClick={() => setRetrofitLocationMode('manual')}>
+                ✍️ Enter Location Manually
+              </button>
+            </div>
+            {retrofitLocationMode === 'manual' ? (
+              <div className="inline-controls">
+                <label>
+                  Province (Pakistan)
+                  <select
+                    value={retrofitManualProvince}
+                    onChange={(event) => {
+                      const province = event.target.value
+                      setRetrofitManualProvince(province)
+                      setRetrofitManualCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
+                    }}
+                  >
+                    {Object.keys(provinceRisk).map((province) => (
+                      <option key={province}>{province}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  City / District (Pakistan)
+                  <select value={retrofitManualCity} onChange={(event) => setRetrofitManualCity(event.target.value)}>
+                    {availableRetrofitManualCities.map((city) => (
+                      <option key={city}>{city}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <p>
+                Auto Location Target: <strong>{selectedProvince}</strong> / <strong>{retrofitCity || 'Nearest city'}</strong>
+                {detectedUserLocation && (
+                  <>
+                    {' '}
+                    (GPS: {detectedUserLocation.lat.toFixed(4)}, {detectedUserLocation.lng.toFixed(4)})
+                  </>
+                )}
+              </p>
+            )}
+            {locationAccessMsg && <p>{locationAccessMsg}</p>}
+          </div>
+
           <label>
-                Upload Clear Building Photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (file) {
-                      setRetrofitImageFile(file)
-                      setRetrofitImagePreview(URL.createObjectURL(file))
-                      setRetrofitError(null)
-                    }
-                  }}
-                />
+            Upload Defect Photos in Series (Image 1, 2, 3...)
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => {
+                handleRetrofitSeriesUpload(event.target.files)
+              }}
+            />
           </label>
 
-              <button
-                onClick={() => {
-                  if (!retrofitImageFile) {
-                    setRetrofitError('Upload a building photo first, then click Retrofit Guidance.')
-                    return
-                  }
-                  void analyzeRetrofitImage(retrofitImageFile)
-                }}
-                disabled={isAnalyzingImage}
-              >
-                {isAnalyzingImage ? '🔄 Generating Retrofit Guidance...' : '🛠️ Retrofit Guidance'}
-              </button>
+          {retrofitImageSeriesFiles.length > 0 && (
+            <p>
+              Selected Photos: <strong>{retrofitImageSeriesFiles.length}</strong>
+            </p>
+          )}
 
-              <button
-                onClick={() => {
-                  void runMlRetrofitGuidance({ source: 'manual' })
-                }}
-                disabled={isAnalyzingImage || isGeneratingMlGuidance}
-              >
-                {isGeneratingMlGuidance ? '🔄 Running ML Retrofit Guidance...' : '🤖 Run ML Retrofit Guidance'}
-              </button>
+          <div className="retrofit-action-row" role="group" aria-label="Retrofit estimate actions">
+            <button onClick={() => void calculateRetrofitEstimateFromSeries()} disabled={isCalculatingRetrofitEstimate}>
+              {isCalculatingRetrofitEstimate
+                ? '🔄 Analyzing Images + Running ML Cost Estimator...'
+                : '🧮 Calculate Retrofit Estimated Cost'}
+            </button>
+          </div>
 
-              <div className="inline-controls">
-                <button onClick={saveRetrofitTrainingData} disabled={isSavingTrainingData || isAnalyzingImage}>
-                  {isSavingTrainingData ? '🔄 Saving Training Data...' : '🧪 Training Data'}
-                </button>
-                <button onClick={trainRetrofitMlModelFromData} disabled={isTrainingMlModel}>
-                  {isTrainingMlModel ? '🔄 Training ML Model...' : '📈 Train ML Model'}
-                </button>
-              </div>
+          {isCalculatingRetrofitEstimate && (
+            <p>Deep analysis in progress: inspecting each image, deriving defect severity, and generating final cost estimate.</p>
+          )}
+          {retrofitError && <p>{retrofitError}</p>}
 
-              {trainingDataStatus && <p>{trainingDataStatus}</p>}
-
-              {isAnalyzingImage && <p>AI is analyzing structure visibility, defects, corrosion zones, and retrofit cues...</p>}
-              {retrofitError && <p>{retrofitError}</p>}
-
-              {retrofitImagePreview && (
-                <div className="retrofit-preview-wrap">
-                  <img src={retrofitImagePreview} alt="Uploaded building" className="retrofit-preview" />
-                </div>
-              )}
-
-              {retrofitImageInsights && (
-                <div className="retrofit-insights-grid">
-                  <p>
-                    Resolution: <strong>{retrofitImageInsights.width}</strong> x <strong>{retrofitImageInsights.height}</strong>
-                  </p>
-                  <p>
-                    Lighting Index: <strong>{retrofitImageInsights.brightness.toFixed(1)}</strong>
-                  </p>
-                  <p>
-                    Contrast Index: <strong>{retrofitImageInsights.contrast.toFixed(1)}</strong>
-                  </p>
-                  <p>
-                    Sharpness Index: <strong>{retrofitImageInsights.sharpness.toFixed(1)}</strong>
-                  </p>
-                  <p>
-                    AI Visual Quality: <strong>{retrofitImageInsights.quality}</strong>
-                  </p>
-                </div>
-              )}
-
-              {visionAnalysis && (
-                <div className="retrofit-model-output">
-                  <h3>Model Detection Output</h3>
-                  <p>
-                    Summary: <strong>{visionAnalysis.summary}</strong>
-                  </p>
-                  <p>
-                    Model: <strong>{visionAnalysis.model}</strong> | Visibility Quality:{' '}
-                    <strong>{visionAnalysis.imageQuality.visibility}</strong>
-                  </p>
-                  <p>{visionAnalysis.imageQuality.notes}</p>
-
-                  {visionAnalysis.defects.length > 0 && (
-                    <div className="retrofit-defect-list">
-                      {visionAnalysis.defects.map((defect, index) => (
-                        <article key={`${defect.type}-${index}`} className="retrofit-defect-card">
-                          <h4>
-                            {defect.type.toUpperCase()} | Severity: {defect.severity.toUpperCase()} | Confidence:{' '}
-                            {(defect.confidence * 100).toFixed(0)}%
-                          </h4>
-                          <p>
-                            <strong>Location:</strong> {defect.location}
-                          </p>
-                          <p>
-                            <strong>Evidence:</strong> {defect.evidence}
-                          </p>
-                          <p>
-                            <strong>Retrofit Action:</strong> {defect.retrofitAction}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-
-                  <p>
-                    <strong>Safety Note:</strong> {visionAnalysis.safetyNote}
-                  </p>
-                </div>
-              )}
-
-              {retrofitAiGuidelines.length > 0 && (
-                <div className="retrofit-ai-guidance">
-                  <h3>AI Retrofit Guidance</h3>
-                  <ul>
-                    {retrofitAiGuidelines.map((advice) => (
-                      <li key={advice}>{advice}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="retrofit-model-output">
-                <h3>Retrofit Calculator</h3>
-                <p>
-                  Estimate Source: <strong>{retrofitEstimate.estimateSource}</strong>
-                  {retrofitEstimate.estimateSource === 'Image-driven' && ' (based on uploaded image defect analysis)'}
-                  {retrofitEstimate.estimateSource === 'ML Model' && ' (kNN model calibrated for Pakistan retrofit cases)'}
-                </p>
-                {retrofitEstimate.mlModel && (
-                  <p>
-                    ML Model: <strong>{retrofitEstimate.mlModel}</strong>
-                    {typeof retrofitEstimate.mlConfidence === 'number' && (
-                      <>
-                        {' '}
-                        | Confidence: <strong>{(retrofitEstimate.mlConfidence * 100).toFixed(0)}%</strong>
-                      </>
-                    )}
-                  </p>
-                )}
-                <div className="inline-controls">
-                  <label>
-                    Retrofit Scope
-                    <select
-                      value={retrofitEstimate.effectiveScope}
-                      disabled={retrofitEstimate.estimateSource !== 'Manual'}
-                      onChange={(event) => setRetrofitScope(event.target.value as 'Basic' | 'Standard' | 'Comprehensive')}
-                    >
-                      <option>Basic</option>
-                      <option>Standard</option>
-                      <option>Comprehensive</option>
-                    </select>
-                  </label>
-                  <label>
-                    Defect Severity
-                    <select
-                      value={retrofitEstimate.effectiveDamageLevel}
-                      disabled={retrofitEstimate.estimateSource !== 'Manual'}
-                      onChange={(event) => setRetrofitDamageLevel(event.target.value as 'Low' | 'Medium' | 'High')}
-                    >
-                      <option>Low</option>
-                      <option>Medium</option>
-                      <option>High</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="retrofit-insights-grid">
-                  <p>
-                    Area Considered: <strong>{retrofitEstimate.area.toLocaleString()} sq ft</strong>
-                  </p>
-                  <p>
-                    Base Cost: <strong>PKR {Math.round(retrofitEstimate.baseCost).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Hazard Adjusted: <strong>PKR {Math.round(retrofitEstimate.adjustedCost).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Contingency (12%): <strong>PKR {Math.round(retrofitEstimate.contingency).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Estimated Total: <strong>PKR {Math.round(retrofitEstimate.totalCost).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Image-Based Range:{' '}
-                    <strong>
-                      PKR {Math.round(retrofitEstimate.minTotalCost).toLocaleString()} - PKR{' '}
-                      {Math.round(retrofitEstimate.maxTotalCost).toLocaleString()}
-                    </strong>
-                  </p>
-                  <p>
-                    Effective Rate: <strong>PKR {Math.round(retrofitEstimate.sqftRate).toLocaleString()}/sq ft</strong>
-                  </p>
-                  <p>
-                    Location Cost Factor: <strong>{retrofitEstimate.locationFactor.toFixed(2)}x</strong>
-                  </p>
-                  <p>
-                    Labor Rate (daily): <strong>PKR {Math.round(retrofitEstimate.laborDaily).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Material Index: <strong>{retrofitEstimate.materialIndex.toFixed(2)}</strong>
-                  </p>
-                  <p>
-                    Logistics Index: <strong>{retrofitEstimate.logisticsIndex.toFixed(2)}</strong>
-                  </p>
-                  <p>
-                    Equipment Index: <strong>{retrofitEstimate.equipmentIndex.toFixed(2)}</strong>
-                  </p>
-                  <p>
-                    Estimated Duration: <strong>{retrofitEstimate.durationWeeks} weeks</strong>
-                  </p>
-                  {retrofitEstimate.affectedAreaPercent && (
-                    <p>
-                      Affected Area (detected): <strong>{Math.round(retrofitEstimate.affectedAreaPercent)}%</strong>
-                    </p>
-                  )}
-                  {retrofitEstimate.urgencyLevel && (
-                    <p>
-                      Urgency Level (detected): <strong>{retrofitEstimate.urgencyLevel}</strong>
-                    </p>
-                  )}
-                </div>
-                {retrofitEstimate.mlGuidance.length > 0 && (
-                  <ul>
-                    {retrofitEstimate.mlGuidance.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
-                {mlEstimate?.guidanceDetailed && mlEstimate.guidanceDetailed.length > 0 && (
-                  <div className="retrofit-defect-list">
-                    {mlEstimate.guidanceDetailed.map((item) => (
-                      <article key={`${item.priority}-${item.action}`} className="retrofit-defect-card">
-                        <h4>
-                          {item.priority} | {item.action}
-                        </h4>
-                        <p>
-                          <strong>Rationale:</strong> {item.rationale}
-                        </p>
-                        <p>
-                          <strong>Expected Impact:</strong> {item.estimatedImpact}
-                        </p>
-                      </article>
-                    ))}
+          {retrofitImageSeriesPreviewUrls.length > 0 && (
+            <div className="retrofit-defect-list">
+              {retrofitImageSeriesPreviewUrls.map((preview, index) => (
+                <article key={`${preview}-${index}`} className="retrofit-defect-card">
+                  <h4>Image {index + 1}</h4>
+                  <div className="retrofit-preview-wrap">
+                    <img src={preview} alt={`Retrofit upload ${index + 1}`} className="retrofit-preview" />
                   </div>
-                )}
-                {mlEstimate?.assumptions && mlEstimate.assumptions.length > 0 && (
+                </article>
+              ))}
+            </div>
+          )}
+
+          {retrofitImageSeriesResults.length > 0 && (
+            <div className="retrofit-model-output">
+              <h3>Per-Image Analysis</h3>
+              <div className="retrofit-defect-list">
+                {retrofitImageSeriesResults.map((item, index) => (
+                  <article key={item.id} className="retrofit-defect-card">
+                    <h4>
+                      Image {index + 1}: {item.fileName}
+                    </h4>
+                    <p>
+                      <strong>Summary:</strong> {item.summary}
+                    </p>
+                    <p>
+                      <strong>Defects:</strong> {item.defectCount} | <strong>Severity Score:</strong> {item.severityScore}/100
+                    </p>
+                    <p>
+                      <strong>Affected Area:</strong> {item.affectedAreaPercent}% | <strong>Visibility:</strong> {item.visibility}
+                    </p>
+                    <p>
+                      <strong>Estimated Cost (image):</strong> PKR {Math.round(item.estimatedCost).toLocaleString()}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {retrofitFinalEstimate && (
+            <div className="retrofit-model-output">
+              <h3>Final Estimated Retrofit Cost</h3>
+              <p>
+                Estimate Source: <strong>{retrofitFinalEstimate.estimateSource}</strong>
+                {retrofitFinalEstimate.estimateSource === 'ML Model' && ' (AI + ML triggered from multi-image analysis)'}
+              </p>
+              {retrofitFinalEstimate.mlModel && (
+                <p>
+                  ML Model: <strong>{retrofitFinalEstimate.mlModel}</strong>
+                  {typeof retrofitFinalEstimate.mlConfidence === 'number' && (
+                    <>
+                      {' '}
+                      | Confidence: <strong>{(retrofitFinalEstimate.mlConfidence * 100).toFixed(0)}%</strong>
+                    </>
+                  )}
+                </p>
+              )}
+              <div className="retrofit-insights-grid">
+                <p>
+                  Stories: <strong>{retrofitFinalEstimate.stories}</strong>
+                </p>
+                <p>
+                  Photos Analyzed: <strong>{retrofitFinalEstimate.imageCount}</strong>
+                </p>
+                <p>
+                  Total Area Considered: <strong>{retrofitFinalEstimate.totalAreaSqft.toLocaleString()} sq ft</strong>
+                </p>
+                <p>
+                  Final Estimated Cost: <strong>PKR {Math.round(retrofitFinalEstimate.totalCost).toLocaleString()}</strong>
+                </p>
+                <p>
+                  Estimated Range:{' '}
+                  <strong>
+                    PKR {Math.round(retrofitFinalEstimate.minTotalCost).toLocaleString()} - PKR{' '}
+                    {Math.round(retrofitFinalEstimate.maxTotalCost).toLocaleString()}
+                  </strong>
+                </p>
+                <p>
+                  Effective Rate: <strong>PKR {Math.round(retrofitFinalEstimate.sqftRate).toLocaleString()}/sq ft</strong>
+                </p>
+                <p>
+                  Scope: <strong>{retrofitFinalEstimate.scope}</strong>
+                </p>
+                <p>
+                  Damage Level: <strong>{retrofitFinalEstimate.damageLevel}</strong>
+                </p>
+                <p>
+                  Urgency: <strong>{retrofitFinalEstimate.urgencyLevel}</strong>
+                </p>
+                <p>
+                  Avg Affected Area: <strong>{retrofitFinalEstimate.affectedAreaPercent}%</strong>
+                </p>
+                <p>
+                  Location Cost Factor: <strong>{retrofitFinalEstimate.locationFactor.toFixed(2)}x</strong>
+                </p>
+                <p>
+                  Estimated Duration: <strong>{retrofitFinalEstimate.durationWeeks} weeks</strong>
+                </p>
+              </div>
+              {retrofitFinalEstimate.guidance.length > 0 && (
+                <div className="retrofit-ai-guidance">
+                  <h3>Retrofit Guidance</h3>
                   <ul>
-                    {mlEstimate.assumptions.map((item) => (
+                    {retrofitFinalEstimate.guidance.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
-                )}
-                <button onClick={downloadRetrofitEstimate}>📥 Download Retrofit Estimate PDF</button>
-              </div>
+                </div>
+              )}
+              {mlEstimate?.guidanceDetailed && mlEstimate.guidanceDetailed.length > 0 && (
+                <div className="retrofit-defect-list">
+                  {mlEstimate.guidanceDetailed.map((item) => (
+                    <article key={`${item.priority}-${item.action}`} className="retrofit-defect-card">
+                      <h4>
+                        {item.priority} | {item.action}
+                      </h4>
+                      <p>
+                        <strong>Rationale:</strong> {item.rationale}
+                      </p>
+                      <p>
+                        <strong>Expected Impact:</strong> {item.estimatedImpact}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <button onClick={downloadRetrofitEstimate}>📥 Download Retrofit Estimate PDF</button>
+            </div>
+          )}
 
             </div>
           )
@@ -5555,7 +5365,17 @@ function App() {
           <>
             <section className="home-card-grid">
               {homeSectionKeys.map((key) => (
-                <button key={key} className={`home-card ${homeCardMeta[key].tone}`} onClick={() => navigateToSection(key)}>
+                <button
+                  key={key}
+                  className={`home-card ${homeCardMeta[key].tone}`}
+                  onClick={() => {
+                    if (key === 'pgbc') {
+                      openPgbcPortalHome()
+                      return
+                    }
+                    navigateToSection(key)
+                  }}
+                >
                   <span className="home-card-icon">{homeCardMeta[key].icon}</span>
                   <span className="home-card-copy">
                     <strong>{homeCardMeta[key].title}</strong>

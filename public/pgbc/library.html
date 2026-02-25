@@ -142,16 +142,11 @@
     // Load user info and codes when page loads
     window.onload = function() {
         let user = JSON.parse(sessionStorage.getItem('currentUser'));
-        if (!user) {
-            window.location.href = 'index.html';
-            return;
-        }
-        
         currentUser = user;
-        document.getElementById("userInfo").innerText = `Logged in as: ${user.role}`;
+        document.getElementById("userInfo").innerText = user ? `Logged in as: ${user.role}` : "Guest mode";
         updateNavButtons();
         
-        if (user.role === "Authority") {
+        if (user && user.role === "Authority") {
             document.getElementById("uploadSection").classList.remove("hidden");
         }
         

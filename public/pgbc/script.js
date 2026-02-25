@@ -182,13 +182,6 @@ async function searchLibrary() {
         return;
     }
 
-    const user = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
-    if (!user) {
-        showSection('login');
-        alert('Please login first to search and open a code section.');
-        return;
-    }
-
     const availableCodes = [];
     predefinedCodes.forEach((code, index) => {
         if (deletedPredefinedCodes.includes(index)) return;
@@ -900,9 +893,9 @@ function updateNavButtons() {
         if (adminLoginBtn) adminLoginBtn.classList.add('hidden');
         if (logoutBtn) logoutBtn.classList.remove('hidden');
     } else {
-        // User is not logged in
-        if (signupBtn) signupBtn.classList.remove('hidden');
-        if (loginBtn) loginBtn.classList.remove('hidden');
+        // Public home access without user login; keep only admin login visible
+        if (signupBtn) signupBtn.classList.add('hidden');
+        if (loginBtn) loginBtn.classList.add('hidden');
         if (adminLoginBtn) adminLoginBtn.classList.remove('hidden');
         if (logoutBtn) logoutBtn.classList.add('hidden');
     }
@@ -1187,11 +1180,6 @@ function checkLogin() {
 }
 
 function goToLibrary() {
-    let user = JSON.parse(sessionStorage.getItem('currentUser'));
-    if (!user) {
-        showSection('login');
-        return;
-    }
     window.location.href = 'library.html';
 }
 

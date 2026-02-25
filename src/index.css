@@ -717,6 +717,20 @@ img {
   margin: 4px 0;
 }
 
+.retrofit-action-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin-bottom: var(--space-3);
+  padding-bottom: 2px;
+}
+
+.retrofit-action-row button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .section-settings {
   background: linear-gradient(180deg, #ffffff 0%, #f3f9ff 100%);
 }

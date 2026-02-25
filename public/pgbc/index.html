@@ -27,8 +27,6 @@
 <nav class="portal-nav">
     <button id="homeBtn" class="active-tab" onclick="showSection('home')">Home</button>
     <button id="libraryBtn" onclick="goToLibrary()">Codes Library</button>
-    <button id="signupBtn" onclick="showSection('signup')">Signup</button>
-    <button id="loginBtn" onclick="showSection('login')">Login</button>
     <button id="adminLoginBtn" onclick="showSection('adminLogin')">Admin Login</button>
     <button id="logoutBtn" onclick="logout()" class="hidden">Logout</button>
 </nav>
@@ -98,7 +96,6 @@
         <div id="signupFields"></div>
 
         <button class="auth-btn" onclick="handleSignup()">Signup</button>
-        <p class="auth-link-line">Already have an account? <a href="#" onclick="showSection('login'); return false;">Login here</a></p>
         <p class="auth-link-line">Admin? <a href="#" onclick="showSection('adminLogin'); return false;">Login as Admin</a></p>
     </div>
 </section>
@@ -139,7 +136,6 @@
         </div>
 
         <button class="auth-btn" onclick="handleLogin()">Login</button>
-        <p class="auth-link-line">Don’t have an account? <a href="#" onclick="showSection('signup'); return false;">Signup Here</a></p>
         <button class="admin-switch-btn" onclick="showSection('adminLogin')">Admin? Login as Admin</button>
     </div>
 </section>
@@ -154,7 +150,6 @@
         <input type="password" id="adminPassword" placeholder="Password">
 
         <button class="auth-btn" onclick="handleAdminLogin()">Login as Admin</button>
-        <p class="auth-link-line">User? <a href="#" onclick="showSection('login'); return false;">Login here</a></p>
     </div>
 </section>
 </main>
