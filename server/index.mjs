@@ -15,8 +15,17 @@ const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } })
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const port = Number(process.env.PORT ?? process.env.VISION_API_PORT ?? 8787)
-const model = process.env.OPENAI_VISION_MODEL ?? 'gpt-4.1-mini'
-const hasKey = Boolean(process.env.OPENAI_API_KEY)
+const AI_PROVIDER = String(process.env.AI_PROVIDER ?? 'openai').trim().toLowerCase()
+const selectedAiProvider = AI_PROVIDER === 'huggingface' ? 'huggingface' : 'openai'
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY ?? '').trim()
+const OPENAI_MODEL = String(process.env.OPENAI_VISION_MODEL ?? 'gpt-4.1-mini').trim()
+const HUGGINGFACE_API_KEY = String(process.env.HUGGINGFACE_API_KEY ?? '').trim()
+const HUGGINGFACE_BASE_URL = String(process.env.HUGGINGFACE_BASE_URL ?? 'https://router.huggingface.co/v1').trim()
+const HUGGINGFACE_CHAT_MODEL = String(process.env.HUGGINGFACE_CHAT_MODEL ?? 'meta-llama/Llama-3.1-8B-Instruct').trim()
+const HUGGINGFACE_VISION_MODEL = String(process.env.HUGGINGFACE_VISION_MODEL ?? HUGGINGFACE_CHAT_MODEL).trim()
+const HUGGINGFACE_IMAGE_MODEL = String(process.env.HUGGINGFACE_IMAGE_MODEL ?? 'black-forest-labs/FLUX.1-dev').trim()
+const model = selectedAiProvider === 'huggingface' ? HUGGINGFACE_CHAT_MODEL : OPENAI_MODEL
+const hasKey = selectedAiProvider === 'huggingface' ? Boolean(HUGGINGFACE_API_KEY) : Boolean(OPENAI_API_KEY)
 const NDMA_ADVISORIES_URL = process.env.NDMA_ADVISORIES_URL ?? 'https://ndma.gov.pk/advisories'
 const NDMA_SITREPS_URL = process.env.NDMA_SITREPS_URL ?? 'https://ndma.gov.pk/sitreps'
 const NDMA_PROJECTIONS_URL = process.env.NDMA_PROJECTIONS_URL ?? 'https://ndma.gov.pk/projection-impact-list_new'
@@ -47,7 +56,11 @@ const communityIssueImagesDir = path.join(communityIssuesDir, 'images')
 const communityIssuesDataFile = path.join(communityIssuesDir, 'issues.json')
 const allowedCommunityIssueStatuses = new Set(['Submitted', 'In Review', 'In Progress', 'Resolved', 'Rejected'])
 
-const openai = hasKey ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+const openai = selectedAiProvider === 'openai' && OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
+const huggingFaceRouterClient =
+  selectedAiProvider === 'huggingface' && HUGGINGFACE_API_KEY
+    ? new OpenAI({ apiKey: HUGGINGFACE_API_KEY, baseURL: HUGGINGFACE_BASE_URL })
+    : null
 
 app.use(cors())
 app.use(express.json({ limit: '2mb' }))
@@ -71,6 +84,90 @@ const extractJson = (rawText) => {
 }
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
+
+const getAiMissingConfigMessage = (feature) =>
+  selectedAiProvider === 'huggingface'
+    ? `Hugging Face key missing. Set HUGGINGFACE_API_KEY for ${feature}.`
+    : `OpenAI key missing. Set OPENAI_API_KEY for ${feature}.`
+
+const getActiveChatClient = () => (selectedAiProvider === 'huggingface' ? huggingFaceRouterClient : openai)
+
+const createChatCompletion = async ({ messages, temperature = 0.2, modelName }) => {
+  const client = getActiveChatClient()
+  if (!client) {
+    throw new Error(getAiMissingConfigMessage('AI chat requests'))
+  }
+
+  return client.chat.completions.create({
+    model: modelName || model,
+    temperature,
+    messages,
+  })
+}
+
+const parseImageSize = (size) => {
+  if (!size || size === 'auto') {
+    return { width: 1024, height: 1024 }
+  }
+
+  const [rawWidth, rawHeight] = String(size).split('x')
+  const width = Math.max(256, Number(rawWidth) || 1024)
+  const height = Math.max(256, Number(rawHeight) || 1024)
+  return { width, height }
+}
+
+const generateImageBase64 = async ({ prompt, size = '1024x1024' }) => {
+  if (selectedAiProvider === 'huggingface') {
+    if (!HUGGINGFACE_API_KEY) {
+      throw new Error(getAiMissingConfigMessage('AI image generation'))
+    }
+
+    const { width, height } = parseImageSize(size)
+    const response = await fetch(`https://api-inference.huggingface.co/models/${HUGGINGFACE_IMAGE_MODEL}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+        'Content-Type': 'application/json',
+        Accept: 'image/png',
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: {
+          width,
+          height,
+        },
+      }),
+    })
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+    if (!response.ok || contentType.includes('application/json')) {
+      const errorBody = contentType.includes('application/json')
+        ? await response.json().catch(() => null)
+        : await response.text().catch(() => '')
+      const errorText =
+        typeof errorBody === 'string'
+          ? errorBody
+          : errorBody?.error || errorBody?.message || JSON.stringify(errorBody ?? {})
+      throw new Error(`Hugging Face image generation failed (${response.status}): ${errorText}`)
+    }
+
+    const buffer = await response.arrayBuffer()
+    return Buffer.from(buffer).toString('base64')
+  }
+
+  if (!openai) {
+    throw new Error(getAiMissingConfigMessage('AI image generation'))
+  }
+
+  const generated = await openai.images.generate({
+    model: 'gpt-image-1',
+    prompt,
+    size,
+  })
+
+  return generated.data?.[0]?.b64_json ?? null
+}
+
 const fetchRemoteText = async (url, timeoutMs = 14000) => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -403,9 +500,9 @@ const mapGuidanceSteps = (value) =>
     .filter((step) => step.title && step.description)
     .slice(0, 5)
 
-const translateGuidanceToUrdu = async (openaiClient, modelName, guidance) => {
-  const translationCompletion = await openaiClient.chat.completions.create({
-    model: modelName,
+const translateGuidanceToUrdu = async (guidance) => {
+  const translationCompletion = await createChatCompletion({
+    modelName: model,
     temperature: 0,
     messages: [
       {
@@ -433,7 +530,7 @@ const translateGuidanceToUrdu = async (openaiClient, modelName, guidance) => {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, hasVisionKey: hasKey, model })
+  res.json({ ok: true, hasVisionKey: hasKey, provider: selectedAiProvider, model })
 })
 
 app.post('/api/recovery/send-credentials', async (req, res) => {
@@ -645,10 +742,9 @@ app.get('/api/ndma/projections', async (_req, res) => {
 })
 
 app.post('/api/vision/analyze', upload.single('image'), async (req, res) => {
-  if (!openai) {
+  if (!hasKey) {
     res.status(503).json({
-      error:
-        'OpenAI key missing. Set OPENAI_API_KEY in your environment to enable deep vision analysis.',
+      error: getAiMissingConfigMessage('deep vision analysis'),
     })
     return
   }
@@ -667,8 +763,8 @@ app.post('/api/vision/analyze', upload.single('image'), async (req, res) => {
     const imageBase64 = req.file.buffer.toString('base64')
     const imageDataUrl = `data:${req.file.mimetype};base64,${imageBase64}`
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: selectedAiProvider === 'huggingface' ? HUGGINGFACE_VISION_MODEL : model,
       temperature: 0.2,
       messages: [
         {
@@ -926,8 +1022,8 @@ app.patch('/api/community/issues/:id/status', async (req, res) => {
 })
 
 app.post('/api/guidance/construction', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for AI construction guidance.' })
+  if (!hasKey) {
+    res.status(503).json({ error: getAiMissingConfigMessage('AI construction guidance') })
     return
   }
 
@@ -938,8 +1034,8 @@ app.post('/api/guidance/construction', async (req, res) => {
     const structureType = String(req.body.structureType ?? 'Masonry House')
     const bestPracticeName = String(req.body.bestPracticeName ?? 'General Resilient Construction Practice')
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: model,
       temperature: 0.15,
       messages: [
         {
@@ -967,7 +1063,7 @@ app.post('/api/guidance/construction', async (req, res) => {
       steps,
     }
 
-    const translated = await translateGuidanceToUrdu(openai, model, englishGuidance)
+    const translated = await translateGuidanceToUrdu(englishGuidance)
 
     res.json({
       ...englishGuidance,
@@ -983,8 +1079,8 @@ app.post('/api/guidance/construction', async (req, res) => {
 })
 
 app.post('/api/guidance/step-images', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for AI step images.' })
+  if (!hasKey) {
+    res.status(503).json({ error: getAiMissingConfigMessage('AI step images') })
     return
   }
 
@@ -1002,13 +1098,11 @@ app.post('/api/guidance/step-images', async (req, res) => {
       let lastError = null
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-          const generated = await openai.images.generate({
-            model: 'gpt-image-1',
+          const b64 = await generateImageBase64({
             prompt,
             size: 'auto',
           })
 
-          const b64 = generated.data?.[0]?.b64_json
           if (!b64) {
             lastError = new Error('No image data returned')
             continue
@@ -1043,8 +1137,8 @@ app.post('/api/guidance/step-images', async (req, res) => {
 })
 
 app.post('/api/advisory/ask', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for AI advisory answers.' })
+  if (!hasKey) {
+    res.status(503).json({ error: getAiMissingConfigMessage('AI advisory answers') })
     return
   }
 
@@ -1064,8 +1158,8 @@ app.post('/api/advisory/ask', async (req, res) => {
 
     const responseLanguage = language === 'Urdu' ? 'Urdu' : 'English'
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: model,
       temperature: 0.3,
       messages: [
         {
@@ -1095,8 +1189,8 @@ app.post('/api/advisory/ask', async (req, res) => {
 })
 
 app.post('/api/pgbc/code-qa', async (req, res) => {
-  if (!openai) {
-    res.status(503).json({ error: 'OpenAI key missing. Set OPENAI_API_KEY for PGBC code Q&A.' })
+  if (!hasKey) {
+    res.status(503).json({ error: getAiMissingConfigMessage('PGBC code Q&A') })
     return
   }
 
@@ -1129,8 +1223,8 @@ app.post('/api/pgbc/code-qa', async (req, res) => {
     const selectedCodeList = selectedCodeNames.length ? selectedCodeNames.join(' | ') : 'Not provided'
     const availableCodeList = allCodeNames.length ? allCodeNames.join(' | ') : selectedCodeList
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: model,
       temperature: 0.1,
       messages: [
         {
@@ -1229,9 +1323,9 @@ app.post('/api/pgbc/code-qa', async (req, res) => {
 })
 
 app.post('/api/models/resilience-catalog', async (req, res) => {
-  if (!openai) {
+  if (!hasKey) {
     res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable AI infra model catalog.',
+      error: getAiMissingConfigMessage('AI infra model catalog'),
     })
     return
   }
@@ -1311,13 +1405,7 @@ app.post('/api/models/resilience-catalog', async (req, res) => {
 
     for (const spec of modelSpecs) {
       const prompt = `Photorealistic infrastructure visualization for ${spec.title} in ${country} (${province}). Show realistic construction context, local materials, climate-appropriate design, and civil engineering details. No text overlays.`
-      const imageResult = await openai.images.generate({
-        model: 'gpt-image-1',
-        prompt,
-        size: '1024x1024',
-      })
-
-      const imageBase64 = imageResult.data?.[0]?.b64_json
+      const imageBase64 = await generateImageBase64({ prompt, size: '1024x1024' })
       if (!imageBase64) continue
 
       models.push({
@@ -1334,9 +1422,9 @@ app.post('/api/models/resilience-catalog', async (req, res) => {
 })
 
 app.post('/api/models/research', async (req, res) => {
-  if (!openai) {
+  if (!hasKey) {
     res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable infra model research.',
+      error: getAiMissingConfigMessage('infra model research'),
     })
     return
   }
@@ -1350,8 +1438,8 @@ app.post('/api/models/research', async (req, res) => {
       return
     }
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: model,
       temperature: 0.2,
       messages: [
         {
@@ -1439,9 +1527,9 @@ app.post('/api/models/research', async (req, res) => {
 })
 
 app.post('/api/models/research-images', async (req, res) => {
-  if (!openai) {
+  if (!hasKey) {
     res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable infra model view image generation.',
+      error: getAiMissingConfigMessage('infra model view image generation'),
     })
     return
   }
@@ -1460,13 +1548,7 @@ app.post('/api/models/research-images', async (req, res) => {
 
     for (const view of views) {
       const prompt = `Photorealistic civil-infrastructure concept image of ${modelName} for Pakistan (${province}). Required camera angle: ${view}. Show realistic structural details, drainage, seismic safety elements, and material context. No text labels.`
-      const generated = await openai.images.generate({
-        model: 'gpt-image-1',
-        prompt,
-        size: '1024x1024',
-      })
-
-      const b64 = generated.data?.[0]?.b64_json
+      const b64 = await generateImageBase64({ prompt, size: '1024x1024' })
       if (!b64) continue
 
       images.push({
@@ -1483,9 +1565,9 @@ app.post('/api/models/research-images', async (req, res) => {
 })
 
 app.post('/api/models/structural-design-report', async (req, res) => {
-  if (!openai) {
+  if (!hasKey) {
     res.status(503).json({
-      error: 'OpenAI key missing. Set OPENAI_API_KEY to enable structural design reporting.',
+      error: getAiMissingConfigMessage('structural design reporting'),
     })
     return
   }
@@ -1502,8 +1584,8 @@ app.post('/api/models/structural-design-report', async (req, res) => {
       return
     }
 
-    const completion = await openai.chat.completions.create({
-      model,
+    const completion = await createChatCompletion({
+      modelName: model,
       temperature: 0.2,
       messages: [
         {
