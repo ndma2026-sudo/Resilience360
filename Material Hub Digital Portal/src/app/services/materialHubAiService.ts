@@ -36,11 +36,13 @@ export type AiMaterialHubResponse = {
   entryOperations: AiEntryOperation[];
 };
 
+const stripTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
 const getPortalApiBaseUrl = () => {
-  const envBase = String(import.meta.env.VITE_PORTAL_API_BASE_URL ?? '').trim();
+  const envBase = String(import.meta.env.VITE_PORTAL_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL ?? '').trim();
 
   if (envBase) {
-    return envBase.replace(/\/$/, '');
+    return stripTrailingSlash(envBase);
   }
 
   if (typeof window !== 'undefined') {
@@ -53,6 +55,48 @@ const getPortalApiBaseUrl = () => {
   return '';
 };
 
+const buildAiApiTargets = (path: string) => {
+  const configuredBase = getPortalApiBaseUrl();
+  const targets = new Set<string>();
+
+  if (configuredBase) {
+    targets.add(`${configuredBase}${path}`);
+  }
+
+  targets.add(path);
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+
+    if (isLocalhost) {
+      targets.add(`http://localhost:8787${path}`);
+    } else if (!configuredBase) {
+      targets.add(`https://resilience360-backend.onrender.com${path}`);
+    }
+  }
+
+  return Array.from(targets);
+};
+
+const parseErrorMessage = async (response: Response) => {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    const payload = await response.json().catch(() => null);
+    return String(payload?.error ?? payload?.message ?? `Request failed with status ${response.status}.`);
+  }
+
+  const text = await response.text().catch(() => '');
+  const compact = text.replace(/\s+/g, ' ').trim();
+
+  if (compact) {
+    return compact.slice(0, 220);
+  }
+
+  return `Request failed with status ${response.status}.`;
+};
+
 export async function requestAiMaterialHubPlan(params: {
   accessToken: string;
   instruction: string;
@@ -60,31 +104,46 @@ export async function requestAiMaterialHubPlan(params: {
   hubs: MaterialHub[];
   inventory: HubInventory[];
 }) {
-  const apiBase = getPortalApiBaseUrl();
-  const endpoint = `${apiBase}/api/material-hubs/ai-agent`;
+  const targets = buildAiApiTargets('/api/material-hubs/ai-agent');
+  const failures: string[] = [];
 
-  const formData = new FormData();
-  formData.append('instruction', params.instruction);
-  formData.append('hubs', JSON.stringify(params.hubs));
-  formData.append('inventory', JSON.stringify(params.inventory));
+  for (const endpoint of targets) {
+    const formData = new FormData();
+    formData.append('instruction', params.instruction);
+    formData.append('hubs', JSON.stringify(params.hubs));
+    formData.append('inventory', JSON.stringify(params.inventory));
 
-  if (params.documentFile) {
-    formData.append('document', params.documentFile);
+    if (params.documentFile) {
+      formData.append('document', params.documentFile);
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const message = await parseErrorMessage(response);
+        failures.push(`${endpoint} -> ${message}`);
+        continue;
+      }
+
+      const payload = await response.json().catch(() => null);
+      if (!payload || typeof payload !== 'object') {
+        failures.push(`${endpoint} -> Invalid JSON response from AI endpoint.`);
+        continue;
+      }
+
+      return payload as AiMaterialHubResponse;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Network error while contacting AI endpoint.';
+      failures.push(`${endpoint} -> ${message}`);
+    }
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.accessToken}`,
-    },
-    body: formData,
-  });
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(String(payload?.error ?? 'AI agent request failed.'));
-  }
-
-  return payload as AiMaterialHubResponse;
+  throw new Error(`AI agent request failed. ${failures.join(' | ')}`);
 }

@@ -11,3 +11,9 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: MATERIAL_HUBS_SUPABASE_URL
+        sync: false
+      - key: MATERIAL_HUBS_SUPABASE_ANON_KEY
+        sync: false
+      - key: MATERIAL_HUBS_ADMIN_EMAILS
+        sync: false
