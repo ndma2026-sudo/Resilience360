@@ -49,6 +49,13 @@ body {
   min-height: 100dvh;
 }
 
+.resilience-bg-shell {
+  background:
+    linear-gradient(180deg, rgba(14, 46, 70, 0.18) 0%, rgba(14, 46, 70, 0.06) 45%, rgba(14, 46, 70, 0.2) 100%),
+    url('/resilience-background.png') center/cover no-repeat fixed;
+  border-radius: 20px;
+}
+
 .home-shell {
   background: rgba(235, 246, 255, 0.42);
   border-radius: 20px;

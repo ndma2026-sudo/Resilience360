@@ -1405,6 +1405,7 @@ function App() {
   const t = translations[language]
   const isUrdu = language === 'ur'
   const isHomeView = !activeSection
+  const isEmbeddedPortalSection = activeSection === 'pgbc' || activeSection === 'coePortal' || activeSection === 'materialHubs'
   const hasPreviousSection = sectionHistory.length > 0
   const infraLayoutVideoSrc = `${import.meta.env.BASE_URL}videos/layout.mp4`
   const activeLearnVideo = useMemo(
@@ -5714,7 +5715,10 @@ function App() {
   }
 
   return (
-    <div className={`app-shell ${isLightweight ? 'lightweight' : ''} ${isHomeView ? 'home-shell' : ''}`} dir={isUrdu ? 'rtl' : 'ltr'}>
+    <div
+      className={`app-shell ${!isEmbeddedPortalSection ? 'resilience-bg-shell' : ''} ${isLightweight ? 'lightweight' : ''} ${isHomeView ? 'home-shell' : ''}`}
+      dir={isUrdu ? 'rtl' : 'ltr'}
+    >
       <header className={`navbar ${isHomeView ? 'home-navbar' : ''}`}>
         <div className="brand">
           <div className="logo-badge">{t.logoText}</div>
