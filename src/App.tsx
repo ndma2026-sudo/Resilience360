@@ -640,8 +640,8 @@ const homeCardMeta: Record<
   },
   pgbc: {
     icon: '🏛️',
-    title: 'PGBC',
-    subtitle: 'Green Building Codes',
+    title: 'Green Building Codes',
+    subtitle: 'Sustainable Building Standards',
     tone: 'tone-c',
   },
   applyRegion: {
