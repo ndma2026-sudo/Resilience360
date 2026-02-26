@@ -355,6 +355,7 @@
         <div class="status"><span class="dot"></span> Live Data <small id="updatedAt">Last Updated: Just Now</small></div>
         <div class="actions">
           <button class="btn back" id="backBtn" type="button">Back</button>
+          <button class="btn" id="autoRotateBtn" type="button">Stop Motion</button>
           <button class="btn" id="fullscreenBtn" type="button">Fullscreen</button>
           <button class="btn primary" id="refreshBtn" type="button">Refresh</button>
         </div>
@@ -415,6 +416,10 @@
       let currentAltitude = 1.7;
       let eventsData = [];
       const defaultCenter = { lat: 20, lng: 15 };
+      let isAutoRotateEnabled = true;
+      let blinkIntervalId = null;
+      let blinkingId = null;
+      let blinkVisible = true;
 
       function resizeGlobeViewport() {
         if (!globe) return;
@@ -548,7 +553,7 @@
           .onPointClick((d) => selectEvent(d.id));
 
         const controls = globe.controls();
-        controls.autoRotate = true;
+        controls.autoRotate = isAutoRotateEnabled;
         controls.autoRotateSpeed = 0.35;
         controls.enableDamping = true;
         controls.dampingFactor = 0.06;
@@ -558,12 +563,83 @@
         return globe;
       }
 
+      function refreshPointsAppearance() {
+        if (!globe) return;
+        globe
+          .pointAltitude((d) => {
+            const base = Math.max(0.01, Math.min(0.22, 0.02 + d.mag * 0.02));
+            if (d.id === selectedId && blinkVisible) {
+              return Math.min(0.34, base + 0.08);
+            }
+            return base;
+          })
+          .pointRadius((d) => {
+            const base = Math.max(0.08, Math.min(0.28, 0.08 + d.mag * 0.03));
+            if (d.id === selectedId && blinkVisible) {
+              return Math.min(0.45, base + 0.12);
+            }
+            return base;
+          })
+          .pointColor((d) => {
+            if (d.id === selectedId) {
+              return blinkVisible ? '#ff3553' : '#ffd2da';
+            }
+            return toPointColor(d.mag);
+          });
+      }
+
+      function stopBlinking() {
+        if (blinkIntervalId) {
+          clearInterval(blinkIntervalId);
+          blinkIntervalId = null;
+        }
+        blinkingId = null;
+        blinkVisible = true;
+      }
+
+      function startBlinking(id) {
+        stopBlinking();
+        blinkingId = id;
+        blinkVisible = true;
+        refreshPointsAppearance();
+
+        let ticks = 0;
+        blinkIntervalId = window.setInterval(() => {
+          if (selectedId !== id || blinkingId !== id) {
+            stopBlinking();
+            refreshPointsAppearance();
+            return;
+          }
+
+          blinkVisible = !blinkVisible;
+          refreshPointsAppearance();
+          ticks += 1;
+
+          if (ticks >= 10) {
+            stopBlinking();
+            refreshPointsAppearance();
+          }
+        }, 260);
+      }
+
+      function setAutoRotation(enabled) {
+        isAutoRotateEnabled = Boolean(enabled);
+        const glb = ensureGlobe();
+        const controls = glb.controls();
+        controls.autoRotate = isAutoRotateEnabled;
+
+        const autoRotateBtn = document.getElementById('autoRotateBtn');
+        if (autoRotateBtn) {
+          autoRotateBtn.textContent = isAutoRotateEnabled ? 'Stop Motion' : 'Start Motion';
+        }
+      }
+
       function focusOn(id) {
         if (!globe || !eventsData.length) return;
         const selected = eventsData.find((item) => item.id === id);
         const target = selected || eventsData[0];
         if (!target) return;
-        globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: selected ? 1.05 : 1.7 }, 900);
+        globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: selected ? 0.55 : 1.7 }, 1000);
       }
 
       function selectEvent(id) {
@@ -571,6 +647,8 @@
         for (const row of quakeRows) {
           row.classList.toggle('selected', row.dataset.id === id);
         }
+        startBlinking(id);
+        refreshPointsAppearance();
         focusOn(id);
       }
 
@@ -629,6 +707,8 @@
           .pointRadius((d) => Math.max(0.08, Math.min(0.28, 0.08 + d.mag * 0.03)))
           .pointColor((d) => d.id === selectedId ? '#ff3553' : toPointColor(d.mag));
 
+        refreshPointsAppearance();
+
         if (sourceMeta) {
           sourceMeta.textContent = window.__sourceLabel || 'Source: live feed';
         }
@@ -668,6 +748,7 @@
         const backBtn = document.getElementById('backBtn');
         const refreshBtn = document.getElementById('refreshBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const autoRotateBtn = document.getElementById('autoRotateBtn');
         const zoomInBtn = document.getElementById('zoomInBtn');
         const zoomOutBtn = document.getElementById('zoomOutBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
@@ -682,6 +763,10 @@
 
         refreshBtn.addEventListener('click', () => {
           load();
+        });
+
+        autoRotateBtn.addEventListener('click', () => {
+          setAutoRotation(!isAutoRotateEnabled);
         });
 
         fullscreenBtn.addEventListener('click', async () => {
@@ -708,9 +793,13 @@
           const glb = ensureGlobe();
           currentAltitude = 1.7;
           selectedId = null;
+          stopBlinking();
           glb.pointOfView({ ...defaultCenter, altitude: currentAltitude }, 600);
           for (const row of quakeRows) row.classList.remove('selected');
+          refreshPointsAppearance();
         });
+
+        setAutoRotation(true);
       }
 
       bindControls();
