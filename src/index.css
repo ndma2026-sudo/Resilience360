@@ -983,6 +983,18 @@ img {
   margin-top: 0;
 }
 
+.infra-model-detail-card h3,
+.infra-model-detail-card h4,
+.infra-model-detail-card p,
+.infra-model-detail-card li {
+  color: #1d4668;
+}
+
+.infra-model-detail-card ul {
+  background: #f4f9ff;
+  border: 1px solid #d2e3f3;
+}
+
 .infra-model-selection-hint {
   margin-top: 0;
 }
