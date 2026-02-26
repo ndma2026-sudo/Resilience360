@@ -1,12 +1,21 @@
 import { Link } from "react-router";
 import { MapPin, Package, TrendingUp, Users, Shield, GraduationCap, Building2, AlertCircle } from "lucide-react";
-import { mockHubs } from "../../data/mockData";
+import { useLiveHubData } from "../../hooks/useLiveHubData";
 
 export function HomePage() {
-  const totalCapacity = mockHubs.reduce((sum, hub) => sum + hub.capacity, 0);
-  const avgStockPercentage = Math.round(
-    mockHubs.reduce((sum, hub) => sum + hub.stockPercentage, 0) / mockHubs.length
-  );
+  const { hubs, isLoading, error } = useLiveHubData();
+  const totalCapacity = hubs.reduce((sum, hub) => sum + hub.capacity, 0);
+  const avgStockPercentage = hubs.length > 0
+    ? Math.round(hubs.reduce((sum, hub) => sum + hub.stockPercentage, 0) / hubs.length)
+    : 0;
+
+  if (isLoading) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-gray-600">Loading portal data...</div>;
+  }
+
+  if (error) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-red-600">{error}</div>;
+  }
 
   return (
     <div>
@@ -52,7 +61,7 @@ export function HomePage() {
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <Building2 className="h-10 w-10 text-emerald-600" />
-              <span className="text-3xl font-bold text-gray-900">{mockHubs.length}</span>
+              <span className="text-3xl font-bold text-gray-900">{hubs.length}</span>
             </div>
             <p className="text-sm text-gray-600">Active Material Hubs</p>
           </div>
@@ -91,7 +100,7 @@ export function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {mockHubs.map((hub) => (
+          {hubs.map((hub) => (
             <div key={hub.id} className="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-xl transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div>

@@ -1,7 +1,17 @@
 import { MapPin, Package, TrendingUp, AlertCircle } from "lucide-react";
-import { mockHubs } from "../../data/mockData";
+import { useLiveHubData } from "../../hooks/useLiveHubData";
 
 export function HubLocations() {
+  const { hubs, isLoading, error } = useLiveHubData();
+
+  if (isLoading) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-gray-600">Loading hub locations...</div>;
+  }
+
+  if (error) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-red-600">{error}</div>;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Header */}
@@ -34,14 +44,14 @@ export function HubLocations() {
           
           {/* Coordinates Display */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
-            {mockHubs.map((hub) => (
+            {hubs.map((hub) => (
               <div key={hub.id} className="bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-md">
                 <div className="flex items-center space-x-2 mb-2">
                   <MapPin className="h-5 w-5 text-emerald-600" />
                   <h4 className="font-bold text-gray-900">{hub.location}</h4>
                 </div>
                 <p className="text-xs text-gray-600">
-                  Coordinates: {hub.coordinates[0].toFixed(4)}°N, {hub.coordinates[1].toFixed(4)}°E
+                  Coordinates: {hub.latitude.toFixed(4)}°N, {hub.longitude.toFixed(4)}°E
                 </p>
               </div>
             ))}
@@ -51,7 +61,7 @@ export function HubLocations() {
 
       {/* Hub Details */}
       <div className="space-y-6">
-        {mockHubs.map((hub) => (
+        {hubs.map((hub) => (
           <div key={hub.id} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow">
             <div className="grid grid-cols-1 lg:grid-cols-3">
               {/* Main Info */}
@@ -126,17 +136,17 @@ export function HubLocations() {
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Coverage Area</h3>
                   <div className="flex flex-wrap gap-2">
-                    {hub.id === 'gb1' && ['Gupis', 'Yasin', 'Darel', 'Tangir', 'Ghizer'].map((area) => (
+                    {hub.id.startsWith('gb') && ['Gupis', 'Yasin', 'Darel', 'Tangir', 'Ghizer'].map((area) => (
                       <span key={area} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm">
                         {area}
                       </span>
                     ))}
-                    {hub.id === 'mzg1' && ['Muzaffargarh City', 'Kot Addu', 'Alipur', 'Jatoi'].map((area) => (
+                    {hub.id.startsWith('mzg') && ['Muzaffargarh City', 'Kot Addu', 'Alipur', 'Jatoi'].map((area) => (
                       <span key={area} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
                         {area}
                       </span>
                     ))}
-                    {hub.id === 'sukkur1' && ['Sukkur City', 'Rohri', 'Pano Aqil', 'New Sukkur'].map((area) => (
+                    {hub.id.startsWith('sukkur') && ['Sukkur City', 'Rohri', 'Pano Aqil', 'New Sukkur'].map((area) => (
                       <span key={area} className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm">
                         {area}
                       </span>
@@ -173,7 +183,7 @@ export function HubLocations() {
 
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <a 
-                    href={`https://maps.google.com/?q=${hub.coordinates[0]},${hub.coordinates[1]}`}
+                    href={`https://maps.google.com/?q=${hub.latitude},${hub.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center space-x-2 w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm"

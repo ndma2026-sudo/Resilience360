@@ -1,18 +1,62 @@
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { LayoutDashboard, Package, FileText, AlertTriangle, BarChart3, LogOut } from "lucide-react";
+import { getCurrentSession, onAuthStateChanged, signOutAdmin } from "../services/authService";
+import { useLiveHubData } from "../hooks/useLiveHubData";
 
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const { hubs } = useLiveHubData();
   
   const isActive = (path: string) => {
     return location.pathname === path || (path !== '/admin' && location.pathname.startsWith(path));
   };
 
-  const handleLogout = () => {
-    // In real implementation, clear auth tokens
-    navigate('/');
+  const handleLogout = async () => {
+    await signOutAdmin();
+    navigate('/login');
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const session = await getCurrentSession();
+        if (!session) {
+          navigate('/login');
+          return;
+        }
+      } finally {
+        if (isMounted) {
+          setIsAuthLoading(false);
+        }
+      }
+    };
+
+    void bootstrap();
+
+    const unsubscribe = onAuthStateChanged((hasSession) => {
+      if (!hasSession) {
+        navigate('/login');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [navigate]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-600">
+        Checking admin session...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -120,7 +164,7 @@ export function AdminLayout() {
               <div className="space-y-2 text-xs text-emerald-700">
                 <div className="flex justify-between">
                   <span>Total Hubs:</span>
-                  <span className="font-bold">3</span>
+                  <span className="font-bold">{hubs.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Active Requests:</span>

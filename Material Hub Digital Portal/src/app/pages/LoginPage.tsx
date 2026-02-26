@@ -1,16 +1,29 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Shield, Lock, Mail } from "lucide-react";
+import { signInAdmin } from "../services/authService";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In real implementation, validate credentials
-    navigate("/admin");
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      await signInAdmin(email.trim(), password);
+      navigate("/admin");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to sign in.";
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -61,6 +74,12 @@ export function LoginPage() {
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <label className="flex items-center">
               <input type="checkbox" className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
@@ -73,18 +92,18 @@ export function LoginPage() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full py-3 bg-gradient-to-r from-emerald-600 to-blue-600 text-white rounded-lg hover:shadow-xl transition-all font-semibold text-lg"
           >
-            Sign In
+            {isSubmitting ? "Signing In..." : "Sign In"}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-center text-sm text-gray-600 mb-4">Authorized access only</p>
+          <p className="text-center text-sm text-gray-600 mb-4">Authorized access only (Supabase Auth)</p>
           <div className="bg-emerald-50 rounded-lg p-4">
-            <p className="text-xs text-emerald-900 font-semibold mb-2">Demo Credentials:</p>
-            <p className="text-xs text-emerald-700">Email: admin@ndma.gov.pk</p>
-            <p className="text-xs text-emerald-700">Password: demo123</p>
+            <p className="text-xs text-emerald-900 font-semibold mb-2">Use your provisioned admin account:</p>
+            <p className="text-xs text-emerald-700">Create users in Supabase Authentication → Users.</p>
           </div>
         </div>
 

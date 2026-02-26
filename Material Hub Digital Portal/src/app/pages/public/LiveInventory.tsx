@@ -1,13 +1,22 @@
 import { useState } from "react";
 import { Package, TrendingDown, AlertCircle, Building2 } from "lucide-react";
-import { mockInventory, mockHubs } from "../../data/mockData";
+import { useLiveHubData } from "../../hooks/useLiveHubData";
 
 export function LiveInventory() {
+  const { hubs, inventory, isLoading, error } = useLiveHubData();
   const [selectedHub, setSelectedHub] = useState<string>("all");
 
   const filteredInventory = selectedHub === "all" 
-    ? mockInventory 
-    : mockInventory.filter(inv => inv.hubId === selectedHub);
+    ? inventory 
+    : inventory.filter(inv => inv.hubId === selectedHub);
+
+  if (isLoading) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-gray-600">Loading live inventory...</div>;
+  }
+
+  if (error) {
+    return <div className="max-w-7xl mx-auto px-4 py-10 text-red-600">{error}</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -35,7 +44,7 @@ export function LiveInventory() {
           >
             All Hubs
           </button>
-          {mockHubs.map((hub) => (
+          {hubs.map((hub) => (
             <button
               key={hub.id}
               onClick={() => setSelectedHub(hub.id)}
@@ -184,7 +193,7 @@ export function LiveInventory() {
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl p-6 text-white shadow-lg">
           <Package className="h-10 w-10 mb-3 opacity-80" />
           <div className="text-3xl font-bold mb-2">
-            {mockInventory.reduce((sum, hub) => sum + hub.materials.length, 0)}
+            {inventory.reduce((sum, hub) => sum + hub.materials.length, 0)}
           </div>
           <div className="text-emerald-100">Total Material Types</div>
         </div>
@@ -192,7 +201,7 @@ export function LiveInventory() {
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-6 text-white shadow-lg">
           <TrendingDown className="h-10 w-10 mb-3 opacity-80" />
           <div className="text-3xl font-bold mb-2">
-            {mockInventory.reduce((sum, hub) => 
+            {inventory.reduce((sum, hub) => 
               sum + hub.materials.reduce((s, m) => s + m.issued, 0), 0
             ).toLocaleString()}
           </div>
@@ -202,7 +211,7 @@ export function LiveInventory() {
         <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-6 text-white shadow-lg">
           <AlertCircle className="h-10 w-10 mb-3 opacity-80" />
           <div className="text-3xl font-bold mb-2">
-            {mockInventory.reduce((sum, hub) => 
+            {inventory.reduce((sum, hub) => 
               sum + hub.materials.reduce((s, m) => s + m.damaged, 0), 0
             ).toLocaleString()}
           </div>
@@ -211,7 +220,7 @@ export function LiveInventory() {
 
         <div className="bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl p-6 text-white shadow-lg">
           <Building2 className="h-10 w-10 mb-3 opacity-80" />
-          <div className="text-3xl font-bold mb-2">{mockHubs.length}</div>
+          <div className="text-3xl font-bold mb-2">{hubs.length}</div>
           <div className="text-orange-100">Active Hubs</div>
         </div>
       </div>

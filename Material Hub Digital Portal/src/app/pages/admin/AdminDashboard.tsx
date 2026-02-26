@@ -1,37 +1,38 @@
 import { TrendingUp, TrendingDown, Package, AlertTriangle, FileText, Building2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
-import { mockHubs, mockInventory, mockIssuanceRequests, mockDamageReports } from "../../data/mockData";
+import { useLiveHubData } from "../../hooks/useLiveHubData";
 
 export function AdminDashboard() {
-  const totalStock = mockInventory.reduce((sum, hub) => 
+  const { hubs, inventory, isLoading, error } = useLiveHubData();
+
+  const totalStock = inventory.reduce((sum, hub) => 
     sum + hub.materials.reduce((s, m) => s + m.closing, 0), 0
   );
   
-  const totalDamaged = mockInventory.reduce((sum, hub) => 
+  const totalDamaged = inventory.reduce((sum, hub) => 
     sum + hub.materials.reduce((s, m) => s + m.damaged, 0), 0
   );
 
-  const avgStockPercentage = Math.round(
-    mockHubs.reduce((sum, hub) => sum + hub.stockPercentage, 0) / mockHubs.length
-  );
+  const avgStockPercentage = hubs.length > 0
+    ? Math.round(hubs.reduce((sum, hub) => sum + hub.stockPercentage, 0) / hubs.length)
+    : 0;
 
-  const pendingRequests = mockIssuanceRequests.filter(r => r.status === 'pending').length;
+  const pendingRequests = 0;
 
   // Chart data
-  const hubStockData = mockHubs.map(hub => ({
+  const hubStockData = hubs.map(hub => ({
     name: hub.location,
     stock: hub.stockPercentage,
     damage: hub.damagePercentage,
   }));
 
   const statusData = [
-    { name: 'Approved', value: mockIssuanceRequests.filter(r => r.status === 'approved').length },
-    { name: 'Pending', value: mockIssuanceRequests.filter(r => r.status === 'pending').length },
-    { name: 'Dispatched', value: mockIssuanceRequests.filter(r => r.status === 'dispatched').length },
-    { name: 'Completed', value: mockIssuanceRequests.filter(r => r.status === 'completed').length },
+    { name: 'Ready', value: hubs.filter((hub) => hub.status === 'ready').length },
+    { name: 'Moderate', value: hubs.filter((hub) => hub.status === 'moderate').length },
+    { name: 'Critical', value: hubs.filter((hub) => hub.status === 'critical').length },
   ];
 
-  const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#8b5cf6'];
+  const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
   const monthlyTrend = [
     { month: 'Sep', issued: 2400, received: 3200 },
@@ -41,6 +42,14 @@ export function AdminDashboard() {
     { month: 'Jan', issued: 3200, received: 3800 },
     { month: 'Feb', issued: 2900, received: 3300 },
   ];
+
+  if (isLoading) {
+    return <div className="text-gray-600">Loading dashboard...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-8">
@@ -66,7 +75,7 @@ export function AdminDashboard() {
             <Building2 className="h-10 w-10 opacity-80" />
             <span className="text-2xl font-bold">{avgStockPercentage}%</span>
           </div>
-          <div className="text-3xl font-bold mb-2">{mockHubs.length} Hubs</div>
+                  <div className="text-3xl font-bold mb-2">{hubs.length} Hubs</div>
           <div className="text-blue-100">Average Stock Level</div>
         </div>
 
@@ -152,21 +161,20 @@ export function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Requests */}
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Issuance Requests</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Hub Updates</h3>
           <div className="space-y-4">
-            {mockIssuanceRequests.slice(0, 3).map((request) => (
-              <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            {hubs.slice(0, 3).map((hub) => (
+              <div key={hub.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{request.requestNumber}</p>
-                  <p className="text-sm text-gray-600">{request.pdmaOffice} • {request.district}</p>
+                  <p className="font-semibold text-gray-900">{hub.name}</p>
+                  <p className="text-sm text-gray-600">{hub.location} • {hub.district}</p>
                 </div>
                 <div className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                  request.status === 'approved' ? 'bg-green-100 text-green-700' :
-                  request.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                  request.status === 'dispatched' ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-700'
+                  hub.status === 'ready' ? 'bg-green-100 text-green-700' :
+                  hub.status === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
                 }`}>
-                  {request.status}
+                  {hub.status}
                 </div>
               </div>
             ))}
@@ -177,7 +185,7 @@ export function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-4">Critical Alerts</h3>
           <div className="space-y-4">
-            {mockHubs.filter(h => h.stockPercentage < 75).map((hub) => (
+            {hubs.filter((h) => h.stockPercentage < 75).map((hub) => (
               <div key={hub.id} className="flex items-start space-x-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
                 <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -186,12 +194,12 @@ export function AdminDashboard() {
                 </div>
               </div>
             ))}
-            {mockDamageReports.filter(r => r.urgencyLevel === 'high').slice(0, 2).map((report) => (
-              <div key={report.id} className="flex items-start space-x-3 p-4 bg-red-50 rounded-lg border border-red-200">
+            {hubs.filter((h) => h.damagePercentage > 10).slice(0, 2).map((hub) => (
+              <div key={hub.id} className="flex items-start space-x-3 p-4 bg-red-50 rounded-lg border border-red-200">
                 <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-semibold text-red-900">{report.materialName} Damage</p>
-                  <p className="text-sm text-red-700">{report.hubName} - {report.damagedCount} items damaged</p>
+                  <p className="font-semibold text-red-900">{hub.name} Damage Risk</p>
+                  <p className="text-sm text-red-700">Damage level {hub.damagePercentage}%</p>
                 </div>
               </div>
             ))}
