@@ -1423,7 +1423,8 @@ function App() {
   const t = translations[language]
   const isUrdu = language === 'ur'
   const isHomeView = !activeSection
-  const isBestPracticesView = activeSection === 'bestPractices'
+  const isApplyRegionView = activeSection === 'applyRegion'
+  const isBestPracticesView = activeSection === 'bestPractices' || isApplyRegionView
   const isRiskMapsView = activeSection === 'riskMaps'
   const isReadinessView = activeSection === 'readiness'
   const isEmbeddedPortalSection = activeSection === 'pgbc' || activeSection === 'coePortal' || activeSection === 'materialHubs'
@@ -4843,96 +4844,124 @@ function App() {
     if (activeSection === 'applyRegion') {
       return (
         <div className="panel section-panel section-apply-region">
-          <h2>Construct in my Region — {applyBestPracticeTitle}</h2>
-          <div className="context-split-layout">
-            <aside className="context-left-panel">
-              <h3>Selection Summary</h3>
-              <p>
-                <strong>Best Practice (Construct in my Region):</strong> {applyBestPracticeTitle}
-              </p>
-              <p>
-                <strong>Area:</strong> {applyCity}, {applyProvince}
-              </p>
-              <p>
-                <strong>Hazard:</strong> {applyHazard}
-              </p>
-            </aside>
-            <div className="context-main-panel">
-              <div className="inline-controls">
-                <label>
-                  Province
-                  <select
-                    value={applyProvince}
-                    onChange={(event) => {
-                      const province = event.target.value
-                      setApplyProvince(province)
-                      setApplyCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
-                    }}
-                  >
-                    {Object.keys(provinceRisk).map((province) => (
-                      <option key={province}>{province}</option>
-                    ))}
-                  </select>
-                  </label>
-                <label>
-                  City
-                  <select value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
-                    {availableApplyCities.map((city) => (
-                      <option key={city}>{city}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Hazard Focus
-                  <select value={applyHazard} onChange={(event) => setApplyHazard(event.target.value as 'flood' | 'earthquake')}>
-                    <option value="flood">Flood</option>
-                    <option value="earthquake">Earthquake</option>
-                  </select>
-                </label>
-                <label>
-                  Best Practice
-                  <select value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
-                    {availableApplyBestPractices.map((item) => (
-                      <option key={item.title} value={item.title}>{item.title}</option>
-                    ))}
-                  </select>
-                </label>
+          <header className="apply-region-head">
+            <h2 className="apply-region-title">
+              Construct in my Region —
+              <span>{applyBestPracticeTitle}</span>
+            </h2>
+            <div className="apply-region-meta-pills" aria-label="Selected area and hazard">
+              <span>📍 {applyCity}, {applyProvince}</span>
+              <span>💧 {applyHazard}</span>
+            </div>
+          </header>
+
+          <div className="apply-region-shell">
+            <section className="apply-region-summary-card" aria-label="Selection Summary">
+              <div className="apply-region-card-head">
+                <h3>🧾 Selection Summary</h3>
+                <p>Adjust your location and best-practice package before generating guidance.</p>
               </div>
-              <div className="retrofit-model-output">
-                <h3>📍 Live Location for Auto-Fill</h3>
-                <div className="inline-controls">
-                  <button onClick={requestCurrentUserLocation} disabled={isDetectingLocation}>
-                    {isDetectingLocation ? '📡 Detecting Live Location...' : '📡 Refresh Live Location'}
-                  </button>
+              <div className="apply-region-summary-grid">
+                <div className="apply-region-summary-copy">
+                  <p>
+                    <strong>Best Practice (Construct in my Region):</strong>
+                  </p>
+                  <p className="apply-region-practice-name">{applyBestPracticeTitle}</p>
+                  <p>
+                    📍 <strong>Area:</strong> {applyCity}, {applyProvince}
+                  </p>
+                  <p>
+                    💧 <strong>Hazard:</strong> {applyHazard}
+                  </p>
                 </div>
-                {locationAccessMsg && <p>{locationAccessMsg}</p>}
+
+                <div className="apply-region-controls-grid">
+                  <div className="apply-region-control">
+                    <label htmlFor="apply-region-province">Province</label>
+                    <select
+                      id="apply-region-province"
+                      aria-label="Province"
+                      value={applyProvince}
+                      onChange={(event) => {
+                        const province = event.target.value
+                        setApplyProvince(province)
+                        setApplyCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
+                      }}
+                    >
+                      {Object.keys(provinceRisk).map((province) => (
+                        <option key={province}>{province}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="apply-region-control">
+                    <label htmlFor="apply-region-city">City</label>
+                    <select id="apply-region-city" aria-label="City" value={applyCity} onChange={(event) => setApplyCity(event.target.value)}>
+                      {availableApplyCities.map((city) => (
+                        <option key={city}>{city}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="apply-region-control apply-region-control-wide">
+                    <label htmlFor="apply-region-practice">Best Practice</label>
+                    <select id="apply-region-practice" aria-label="Best Practice" value={applyBestPracticeTitle} onChange={(event) => handleApplyBestPracticeChange(event.target.value)}>
+                      {availableApplyBestPractices.map((item) => (
+                        <option key={item.title} value={item.title}>{item.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="apply-region-live-card" aria-label="Live location">
+                <div className="apply-region-card-head">
+                <h3>📍 Live Location for Auto-Fill</h3>
+                <p>Use GPS to auto-populate area context and hazard focus.</p>
+                </div>
+                <button className="apply-region-refresh-btn" onClick={requestCurrentUserLocation} disabled={isDetectingLocation}>
+                  {isDetectingLocation ? '🔄 Detecting Live Location...' : '🔁 Refresh Live Location'}
+                </button>
+                {locationAccessMsg && <p className="apply-region-location-msg">{locationAccessMsg}</p>}
                 {detectedUserLocation && (
                   <>
-                    <p>
+                    <p className="apply-region-location-msg">
                       Auto-filled from live location: <strong>{applyCity}, {applyProvince}</strong> | Hazard Focus: <strong>{applyHazard}</strong>
                     </p>
                     <UserLocationMiniMap location={detectedUserLocation} />
                   </>
                 )}
-              </div>
+                <p className="apply-region-inspection-note">
+                  Professional Inspection advice: <strong>Strongly recommended</strong>
+                </p>
+            </section>
 
-              <div className="inline-controls">
-                <button onClick={() => { void generateApplyAreaGuidance('english') }} disabled={isGeneratingGuidance}>
-                  {isGeneratingGuidance && guidanceGenerationLanguage === 'english'
-                    ? '⚡ Generating Construction Guidance in English + Images...'
-                    : '🛠️ Construction Guidance in English'}
+            <div className="apply-region-or-divider" aria-hidden="true">
+              <span>OR</span>
+            </div>
+
+            <div className="apply-region-guidance-actions">
+                <button className="apply-region-guidance-btn" onClick={() => { void generateApplyAreaGuidance('english') }} disabled={isGeneratingGuidance}>
+                  <span className="apply-region-guidance-btn-main">📖 Construction Guidance in English</span>
+                  <span className="apply-region-guidance-btn-sub">
+                    {isGeneratingGuidance && guidanceGenerationLanguage === 'english'
+                      ? 'Generating English guidance + images...'
+                      : 'Generate practical steps, materials, and safety checks'}
+                  </span>
                 </button>
-                <button onClick={() => { void generateApplyAreaGuidance('urdu') }} disabled={isGeneratingGuidance}>
-                  {isGeneratingGuidance && guidanceGenerationLanguage === 'urdu'
-                    ? '⚡ اردو تعمیراتی رہنمائی تیار کی جا رہی ہے...'
-                    : '🛠️ تعمیراتی رہنمائی (اردو)'}
+                <button className="apply-region-guidance-btn" onClick={() => { void generateApplyAreaGuidance('urdu') }} disabled={isGeneratingGuidance}>
+                  <span className="apply-region-guidance-btn-main">📖 تعمیراتی ہدایات</span>
+                  <span className="apply-region-guidance-btn-sub">
+                    {isGeneratingGuidance && guidanceGenerationLanguage === 'urdu'
+                      ? 'اردو رہنمائی اور تصاویر تیار کی جا رہی ہیں...'
+                      : 'مقامی تعمیراتی مراحل، مواد اور حفاظتی نکات'}
+                  </span>
                 </button>
-              </div>
+            </div>
 
-              {guidanceError && <p>{guidanceError}</p>}
+            {guidanceError && <p>{guidanceError}</p>}
 
-              {constructionGuidance && (
-                <div className="retrofit-model-output">
+            {constructionGuidance && (
+                <div className="retrofit-model-output apply-region-guidance-output">
                   {guidanceGenerationLanguage === 'english' ? (
                     <>
                       <h3>Location-Tailored Construction Guidance in English — {applyBestPracticeTitle}</h3>
@@ -5039,7 +5068,6 @@ function App() {
                   {isGeneratingStepImages && <p>Generating AI stepwise construction images...</p>}
                 </div>
               )}
-            </div>
           </div>
         </div>
       )
@@ -5997,7 +6025,7 @@ function App() {
           </>
         )}
         {!isHomeView && (
-          <div className={`section-back-row ${isBestPracticesView ? 'best-practices-back-row' : ''} ${isRiskMapsView ? 'risk-maps-back-row' : ''}`}>
+          <div className={`section-back-row ${isBestPracticesView ? 'best-practices-back-row' : ''} ${isRiskMapsView ? 'risk-maps-back-row' : ''} ${isApplyRegionView ? 'apply-region-back-row' : ''}`}>
             <button className="section-back-btn" onClick={navigateBack}>
               {hasPreviousSection ? '⬅ Back' : '⬅ Back to Home'}
             </button>
