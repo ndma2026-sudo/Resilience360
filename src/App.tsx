@@ -1370,6 +1370,7 @@ function App() {
   const [isSyncingInfraModels, setIsSyncingInfraModels] = useState(false)
   const [infraModelsSyncMessage, setInfraModelsSyncMessage] = useState<string | null>(null)
   const [infraModelsError, setInfraModelsError] = useState<string | null>(null)
+  const [selectedInfraModelId, setSelectedInfraModelId] = useState<string | null>(null)
   const [infraResearchName, setInfraResearchName] = useState('')
   const [isResearchingInfra, setIsResearchingInfra] = useState(false)
   const [infraResearchError, setInfraResearchError] = useState<string | null>(null)
@@ -1413,6 +1414,10 @@ function App() {
   const activeLearnVideo = useMemo(
     () => learnTrainingVideos.find((video) => video.fileName === activeLearnVideoFile) ?? null,
     [activeLearnVideoFile],
+  )
+  const selectedInfraModel = useMemo(
+    () => infraModels.find((model) => model.id === selectedInfraModelId) ?? null,
+    [infraModels, selectedInfraModelId],
   )
 
   const openLearnVideoPlayer = useCallback((fileName: string) => {
@@ -1772,6 +1777,13 @@ function App() {
       localStorage.removeItem(INFRA_MODELS_CACHE_KEY)
     }
   }, [infraModels])
+
+  useEffect(() => {
+    if (!selectedInfraModelId) return
+    if (!infraModels.some((model) => model.id === selectedInfraModelId)) {
+      setSelectedInfraModelId(null)
+    }
+  }, [infraModels, selectedInfraModelId])
 
   useEffect(() => {
     if (!selectedDistrict) return
@@ -4728,26 +4740,44 @@ function App() {
           </div>
 
           {infraModels.length > 0 && (
-            <div className="retrofit-defect-list">
-              {infraModels.map((model) => (
-                <article key={model.id} className="retrofit-defect-card">
-                  <h3>{model.title}</h3>
-                  <p>{model.description}</p>
-                  <img src={model.imageDataUrl} alt={`${model.title} AI visual`} className="retrofit-preview" />
+            <div className="infra-models-viewer">
+              <div className="infra-models-name-list" role="list" aria-label="Infra model names">
+                {infraModels.map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    role="listitem"
+                    className={`infra-model-name-btn ${selectedInfraModelId === model.id ? 'is-active' : ''}`}
+                    onClick={() => setSelectedInfraModelId(model.id)}
+                  >
+                    {model.title}
+                  </button>
+                ))}
+              </div>
+
+              {selectedInfraModel ? (
+                <article className="retrofit-defect-card infra-model-detail-card">
+                  <h3>{selectedInfraModel.title}</h3>
+                  <p>{selectedInfraModel.description}</p>
+                  <img src={selectedInfraModel.imageDataUrl} alt={`${selectedInfraModel.title} AI visual`} className="retrofit-preview" />
                   <h4>Key Features</h4>
                   <ul>
-                    {model.features.map((item) => (
+                    {selectedInfraModel.features.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
                   <h4>Advantages in Pakistan</h4>
                   <ul>
-                    {model.advantagesPakistan.map((item) => (
+                    {selectedInfraModel.advantagesPakistan.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
                 </article>
-              ))}
+              ) : (
+                <div className="retrofit-model-output infra-model-selection-hint">
+                  <p>Select a model name to view its image and description.</p>
+                </div>
+              )}
             </div>
           )}
         </div>

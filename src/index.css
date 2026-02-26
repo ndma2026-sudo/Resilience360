@@ -945,6 +945,48 @@ img {
   max-height: 62vh;
 }
 
+.infra-models-viewer {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.infra-models-name-list {
+  display: grid;
+  gap: 8px;
+}
+
+.infra-model-name-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #edf6ff 0%, #ddeffe 100%);
+  border: 1px solid #c3dcf3;
+  color: #163f62;
+  box-shadow: 0 4px 10px rgba(24, 69, 107, 0.12);
+}
+
+.infra-model-name-btn:hover {
+  background: linear-gradient(180deg, #f4faff 0%, #e6f3ff 100%);
+}
+
+.infra-model-name-btn.is-active {
+  background: linear-gradient(180deg, #2f85be 0%, #1b6292 100%);
+  border-color: #1d5f8d;
+  color: #ffffff;
+}
+
+.infra-model-detail-card {
+  margin-top: 0;
+}
+
+.infra-model-selection-hint {
+  margin-top: 0;
+}
+
 .section-retrofit ol {
   background: #f8fcff;
   border: 1px solid #dceaf7;
@@ -1835,6 +1877,11 @@ progress {
 
   .design-toolkit-gauge-wrap {
     width: min(100%, 260px);
+  }
+
+  .infra-model-name-btn {
+    min-height: 38px;
+    padding: 8px 10px;
   }
 
   .design-toolkit-heading h2 {
