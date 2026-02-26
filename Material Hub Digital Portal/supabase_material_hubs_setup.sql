@@ -57,31 +57,48 @@ alter table public.material_hubs enable row level security;
 alter table public.hub_material_entries enable row level security;
 
 -- Public read access
-create policy if not exists material_hubs_select_all
+drop policy if exists material_hubs_select_all on public.material_hubs;
+create policy material_hubs_select_all
 on public.material_hubs
 for select
 using (true);
 
-create policy if not exists hub_material_entries_select_all
+drop policy if exists hub_material_entries_select_all on public.hub_material_entries;
+create policy hub_material_entries_select_all
 on public.hub_material_entries
 for select
 using (true);
 
 -- Authenticated users (admins) can write
-create policy if not exists material_hubs_write_authenticated
+drop policy if exists material_hubs_write_authenticated on public.material_hubs;
+create policy material_hubs_write_authenticated
 on public.material_hubs
 for all
 using (auth.role() = 'authenticated')
 with check (auth.role() = 'authenticated');
 
-create policy if not exists hub_material_entries_write_authenticated
+drop policy if exists hub_material_entries_write_authenticated on public.hub_material_entries;
+create policy hub_material_entries_write_authenticated
 on public.hub_material_entries
 for all
 using (auth.role() = 'authenticated')
 with check (auth.role() = 'authenticated');
 
-alter publication supabase_realtime add table public.material_hubs;
-alter publication supabase_realtime add table public.hub_material_entries;
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.material_hubs;
+  exception
+    when duplicate_object then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table public.hub_material_entries;
+  exception
+    when duplicate_object then null;
+  end;
+end
+$$;
 
 -- Optional starter data
 insert into public.material_hubs (name, location, district, latitude, longitude, capacity, status, stock_percentage, damage_percentage)
