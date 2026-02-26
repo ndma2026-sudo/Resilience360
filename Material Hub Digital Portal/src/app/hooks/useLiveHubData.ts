@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { HubInventory, MaterialEntry, MaterialHub } from '../data/types';
+import { mockHubs, mockInventory } from '../data/mockData';
 import { listHubs, listMaterialEntries } from '../services/materialHubService';
-import { supabase } from '../services/supabase';
+import { isSupabaseConfigured, supabase } from '../services/supabase';
 
 type LiveHubDataState = {
   hubs: MaterialHub[];
@@ -29,6 +30,44 @@ export function useLiveHubData(): LiveHubDataState {
     setError(null);
 
     try {
+      if (!isSupabaseConfigured) {
+        const fallbackHubs: MaterialHub[] = mockHubs.map((hub) => ({
+          id: hub.id,
+          name: hub.name,
+          location: hub.location,
+          district: hub.district,
+          latitude: hub.coordinates[0],
+          longitude: hub.coordinates[1],
+          capacity: hub.capacity,
+          status: hub.status,
+          stockPercentage: hub.stockPercentage,
+          damagePercentage: hub.damagePercentage,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+
+        const fallbackEntries: MaterialEntry[] = mockInventory.flatMap((inventoryItem) =>
+          inventoryItem.materials.map((entry) => ({
+            id: entry.id,
+            hubId: inventoryItem.hubId,
+            name: entry.name,
+            unit: entry.unit,
+            opening: entry.opening,
+            received: entry.received,
+            issued: entry.issued,
+            closing: entry.closing,
+            damaged: entry.damaged,
+            percentageRemaining: entry.percentageRemaining,
+            createdAt: inventoryItem.lastUpdated,
+            updatedAt: inventoryItem.lastUpdated,
+          })),
+        );
+
+        setHubs(fallbackHubs);
+        setEntries(fallbackEntries);
+        return;
+      }
+
       const [nextHubs, nextEntries] = await Promise.all([listHubs(), listMaterialEntries()]);
       setHubs(nextHubs);
       setEntries(nextEntries);
@@ -45,6 +84,10 @@ export function useLiveHubData(): LiveHubDataState {
   }, [reload]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const channel = supabase
       .channel('material-hubs-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'material_hubs' }, () => {
