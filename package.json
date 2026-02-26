@@ -18,7 +18,9 @@
     "cap:copy": "npx cap copy",
     "cap:open:android": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
-    "mobile:prepare": "npm run build && npm run cap:sync"
+    "mobile:prepare": "npm run build && npm run cap:sync",
+    "material-hubs:sync": "node scripts/sync-material-hubs.mjs",
+    "material-hubs:rebuild": "npm run material-hubs:sync"
   },
   "dependencies": {
     "@capacitor/android": "^8.1.0",

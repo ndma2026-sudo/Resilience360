@@ -64,6 +64,7 @@ type SectionKey =
   | 'designToolkit'
   | 'infraModels'
   | 'coePortal'
+  | 'materialHubs'
   | 'pgbc'
   | 'applyRegion'
   | 'readiness'
@@ -404,6 +405,7 @@ const translations = {
       designToolkit: '🏗️ Design Toolkit',
       infraModels: '🧱 Resilience Infra Models',
       coePortal: '🎓 COE Training Portal',
+      materialHubs: '🏗️ Material Hubs',
       pgbc: '🏛️ PGBC Portal',
       applyRegion: '📍 Construct in my Region',
       readiness: '📊 Readiness Calculator',
@@ -427,6 +429,7 @@ const translations = {
       designToolkit: '🏗️ ڈیزائن ٹول کٹ',
       infraModels: '🧱 ریزیلینس انفرا ماڈلز',
       coePortal: '🎓 سی او ای ٹریننگ پورٹل',
+      materialHubs: '🏗️ میٹریل ہبز',
       pgbc: '🏛️ پی جی بی سی پورٹل',
       applyRegion: '📍 اپنے علاقے میں تعمیر',
       readiness: '📊 تیاری کیلکولیٹر',
@@ -581,6 +584,7 @@ const homeSectionKeys: SectionKey[] = [
   'riskMaps',
   'designToolkit',
   'infraModels',
+  'materialHubs',
   'pgbc',
   'retrofit',
   'warning',
@@ -627,6 +631,12 @@ const homeCardMeta: Record<
     title: 'COE Training Portal',
     subtitle: 'Enroll in COE Lectures',
     tone: 'tone-h',
+  },
+  materialHubs: {
+    icon: '🏗️',
+    title: 'Material Hubs',
+    subtitle: 'Digital Material Hub Portal',
+    tone: 'tone-b',
   },
   pgbc: {
     icon: '🏛️',
@@ -5573,6 +5583,26 @@ function App() {
             title="COE Training Portal"
             className="pgbc-portal-frame"
             src={`${import.meta.env.BASE_URL}coe-portal/#/`}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      )
+    }
+
+    if (activeSection === 'materialHubs') {
+      return (
+        <div className="panel section-panel section-pgbc">
+          <h2>{t.sections.materialHubs}</h2>
+          <div className="inline-controls">
+            <a href={`${import.meta.env.BASE_URL}material-hubs/`} target="_blank" rel="noreferrer">
+              Open Material Hubs in new tab
+            </a>
+          </div>
+          <iframe
+            title="Material Hubs Portal"
+            className="pgbc-portal-frame"
+            src={`${import.meta.env.BASE_URL}material-hubs/`}
             loading="lazy"
             referrerPolicy="no-referrer"
           />
