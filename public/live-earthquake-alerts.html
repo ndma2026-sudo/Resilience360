@@ -122,6 +122,40 @@
         min-height: 0;
       }
 
+      .left-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 0 2px 10px;
+      }
+
+      .left-tab {
+        border: 1px solid rgba(124, 173, 255, 0.35);
+        background: rgba(10, 29, 67, 0.86);
+        color: #dce9ff;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+
+      .left-tab.active {
+        background: linear-gradient(180deg, #2b9cff, #1b6cdd);
+        color: #f7fbff;
+      }
+
+      .left-panel {
+        display: none;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+      }
+
+      .left-panel.active {
+        display: flex;
+      }
+
       .left h2 {
         margin: 4px 2px 8px;
         font-size: 30px;
@@ -140,6 +174,121 @@
         flex: 1;
         max-height: none;
         overflow-y: auto;
+      }
+
+      .locations-list {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .country-row {
+        border: 1px solid rgba(124, 173, 255, 0.2);
+        border-radius: 10px;
+        margin-bottom: 6px;
+        background: rgba(6, 17, 41, 0.88);
+        overflow: hidden;
+      }
+
+      .country-row.active-country {
+        border-color: rgba(82, 209, 142, 0.56);
+      }
+
+      .country-head {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border: none;
+        background: transparent;
+        color: #eef5ff;
+        padding: 9px 10px;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .country-name {
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .country-count {
+        min-width: 32px;
+        text-align: center;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #06142d;
+        background: #86c7ff;
+      }
+
+      .country-count.live {
+        background: #4bff9c;
+      }
+
+      .country-details {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 240ms ease;
+        border-top: 1px solid rgba(124, 173, 255, 0.2);
+      }
+
+      .country-row.expanded .country-details {
+        max-height: 360px;
+      }
+
+      .state-block {
+        padding: 8px 10px;
+        border-top: 1px solid rgba(124, 173, 255, 0.12);
+      }
+
+      .state-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+        color: #c0d5f4;
+        margin-bottom: 6px;
+      }
+
+      .state-name {
+        font-weight: 700;
+        color: #f1f7ff;
+      }
+
+      .state-events {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .state-event {
+        width: 100%;
+        border: 1px solid rgba(113, 167, 250, 0.28);
+        border-radius: 8px;
+        background: rgba(8, 23, 53, 0.92);
+        color: #e6f0ff;
+        font-size: 12px;
+        padding: 6px 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .state-event strong {
+        font-size: 11px;
+        color: #85bfff;
+      }
+
+      .state-empty {
+        color: #9db5dd;
+        font-size: 12px;
+        padding: 8px 10px;
       }
 
       .event {
@@ -364,8 +513,18 @@
       <div class="layout">
         <aside class="left card">
           <h2>Recent Activity</h2>
-          <div class="left-head"><span>Country</span><span>Magnitude</span></div>
-          <div class="events" id="events"></div>
+          <div class="left-tabs">
+            <button type="button" class="left-tab active" id="tabRecentBtn">Recent Activity</button>
+            <button type="button" class="left-tab" id="tabLocationsBtn">Locations</button>
+          </div>
+          <div class="left-panel active" id="recentPanel">
+            <div class="left-head"><span>Country</span><span>Magnitude</span></div>
+            <div class="events" id="events"></div>
+          </div>
+          <div class="left-panel" id="locationsPanel">
+            <div class="left-head"><span>Country</span><span>Live</span></div>
+            <div class="locations-list" id="locationsList"></div>
+          </div>
           <div id="sourceMeta" class="source-meta">Source: loading…</div>
         </aside>
 
@@ -415,8 +574,48 @@
       let selectedId = null;
       let currentAltitude = 1.7;
       let eventsData = [];
+      let locationsData = [];
+      let activeLeftTab = 'recent';
+      let expandedCountry = null;
       const defaultCenter = { lat: 20, lng: 15 };
       let isAutoRotateEnabled = true;
+
+      const usStateNames = new Set([
+        'alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming','district of columbia'
+      ]);
+      const usStateAbbr = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+      const caProvinceNames = new Set(['alberta','british columbia','manitoba','new brunswick','newfoundland and labrador','northwest territories','nova scotia','nunavut','ontario','prince edward island','quebec','saskatchewan','yukon']);
+      const caProvinceAbbr = new Set(['AB','BC','MB','NB','NL','NT','NS','NU','ON','PE','QC','SK','YT']);
+      const countryAlias = {
+        usa: 'United States',
+        'u.s.a.': 'United States',
+        'u.s.': 'United States',
+        us: 'United States',
+        uk: 'United Kingdom',
+        uae: 'United Arab Emirates',
+        russia: 'Russia',
+        korea: 'South Korea',
+        'south korea': 'South Korea',
+        'north korea': 'North Korea',
+      };
+
+      const regionDisplay = typeof Intl !== 'undefined' && Intl.DisplayNames
+        ? new Intl.DisplayNames(['en'], { type: 'region' })
+        : null;
+
+      function getAllCountries() {
+        if (!regionDisplay || !Intl.supportedValuesOf) return [];
+        try {
+          return Intl.supportedValuesOf('region')
+            .map((code) => regionDisplay.of(code))
+            .filter((name) => Boolean(name) && typeof name === 'string' && !/^\d+$/.test(name))
+            .sort((a, b) => a.localeCompare(b));
+        } catch {
+          return [];
+        }
+      }
+
+      const allCountries = getAllCountries();
 
       function selectedQuakeRings(selected) {
         if (!selected) return [];
@@ -468,9 +667,53 @@
         return 'm-low';
       }
 
+      function normalizeCountryToken(token) {
+        const raw = String(token || '').trim();
+        if (!raw) return 'Unknown';
+
+        const lowered = raw.toLowerCase();
+        if (countryAlias[lowered]) return countryAlias[lowered];
+
+        if (/^[A-Z]{2}$/.test(raw) && regionDisplay) {
+          const display = regionDisplay.of(raw);
+          if (display && display !== raw) return display;
+        }
+
+        return raw;
+      }
+
+      function parseGeoFromPlace(place) {
+        const raw = String(place || '').trim();
+        const parts = raw.split(',').map((segment) => segment.trim()).filter(Boolean);
+        const last = parts[parts.length - 1] || 'Unknown';
+        const prev = parts.length > 1 ? parts[parts.length - 2] : '';
+
+        const lastUpper = last.toUpperCase();
+        const lastLower = last.toLowerCase();
+        const prevUpper = prev.toUpperCase();
+        const prevLower = prev.toLowerCase();
+
+        if (usStateAbbr.has(lastUpper) || usStateNames.has(lastLower)) {
+          return { country: 'United States', subdivision: last };
+        }
+
+        if (caProvinceAbbr.has(lastUpper) || caProvinceNames.has(lastLower)) {
+          return { country: 'Canada', subdivision: last };
+        }
+
+        if (usStateAbbr.has(prevUpper) || usStateNames.has(prevLower)) {
+          return { country: 'United States', subdivision: prev };
+        }
+
+        if (caProvinceAbbr.has(prevUpper) || caProvinceNames.has(prevLower)) {
+          return { country: 'Canada', subdivision: prev };
+        }
+
+        return { country: normalizeCountryToken(last), subdivision: null };
+      }
+
       function countryFromPlace(place) {
-        const parts = String(place || '').split(',');
-        return (parts[parts.length - 1] || 'Global').trim();
+        return parseGeoFromPlace(place).country;
       }
 
       function flagFor(country) {
@@ -488,6 +731,149 @@
         if (m >= 5.5) return '#ff982c';
         if (m >= 4.5) return '#e7d63a';
         return '#4aaefe';
+      }
+
+      function setLeftTab(tab) {
+        activeLeftTab = tab === 'locations' ? 'locations' : 'recent';
+
+        const recentBtn = document.getElementById('tabRecentBtn');
+        const locationsBtn = document.getElementById('tabLocationsBtn');
+        const recentPanel = document.getElementById('recentPanel');
+        const locationsPanel = document.getElementById('locationsPanel');
+
+        if (!recentBtn || !locationsBtn || !recentPanel || !locationsPanel) return;
+
+        const isRecent = activeLeftTab === 'recent';
+        recentBtn.classList.toggle('active', isRecent);
+        locationsBtn.classList.toggle('active', !isRecent);
+        recentPanel.classList.toggle('active', isRecent);
+        locationsPanel.classList.toggle('active', !isRecent);
+      }
+
+      function buildLocationsData(data) {
+        const map = new Map();
+
+        for (const name of allCountries) {
+          map.set(name, {
+            country: name,
+            total: 0,
+            subdivisions: new Map(),
+          });
+        }
+
+        for (const event of data) {
+          const geo = parseGeoFromPlace(event.properties.place);
+          const eventId = String(event.id ?? `${event.geometry.coordinates?.[1]}-${event.geometry.coordinates?.[0]}-${event.properties.time}`);
+
+          if (!map.has(geo.country)) {
+            map.set(geo.country, {
+              country: geo.country,
+              total: 0,
+              subdivisions: new Map(),
+            });
+          }
+
+          const countryEntry = map.get(geo.country);
+          countryEntry.total += 1;
+
+          const subdivisionKey = geo.subdivision || 'Other Areas';
+          if (!countryEntry.subdivisions.has(subdivisionKey)) {
+            countryEntry.subdivisions.set(subdivisionKey, {
+              name: subdivisionKey,
+              events: [],
+            });
+          }
+
+          countryEntry.subdivisions.get(subdivisionKey).events.push({
+            id: eventId,
+            place: String(event.properties.place || 'Unknown'),
+            mag: Number(event.properties.mag || 0),
+            time: Number(event.properties.time || Date.now()),
+          });
+        }
+
+        const rows = Array.from(map.values()).map((entry) => {
+          const subdivisions = Array.from(entry.subdivisions.values())
+            .map((item) => ({
+              name: item.name,
+              events: item.events.sort((a, b) => b.mag - a.mag),
+            }))
+            .sort((a, b) => b.events.length - a.events.length || a.name.localeCompare(b.name));
+
+          return {
+            country: entry.country,
+            total: entry.total,
+            subdivisions,
+          };
+        });
+
+        rows.sort((a, b) => {
+          if (a.total > 0 && b.total > 0) return b.total - a.total || a.country.localeCompare(b.country);
+          if (a.total > 0) return -1;
+          if (b.total > 0) return 1;
+          return a.country.localeCompare(b.country);
+        });
+
+        return rows;
+      }
+
+      function renderLocationsPanel() {
+        const host = document.getElementById('locationsList');
+        if (!host) return;
+
+        host.innerHTML = locationsData.map((countryRow) => {
+          const isExpanded = expandedCountry === countryRow.country;
+          const rowClass = `country-row ${countryRow.total > 0 ? 'active-country' : ''} ${isExpanded ? 'expanded' : ''}`;
+          const countClass = `country-count ${countryRow.total > 0 ? 'live' : ''}`;
+
+          const details = countryRow.total > 0
+            ? countryRow.subdivisions.map((sub) => {
+                const events = sub.events.map((ev) => `
+                  <button class="state-event" data-event-id="${ev.id}">
+                    <span>${ev.place}</span>
+                    <strong>M ${ev.mag.toFixed(1)}</strong>
+                  </button>
+                `).join('');
+
+                return `
+                  <div class="state-block">
+                    <div class="state-head">
+                      <span class="state-name">${sub.name}</span>
+                      <span>${sub.events.length} live</span>
+                    </div>
+                    <div class="state-events">${events}</div>
+                  </div>
+                `;
+              }).join('')
+            : '<div class="state-empty">No active earthquakes</div>';
+
+          return `
+            <div class="${rowClass}">
+              <button type="button" class="country-head" data-country="${countryRow.country}">
+                <span class="country-name">${countryRow.country}</span>
+                <span class="${countClass}">${countryRow.total}</span>
+              </button>
+              <div class="country-details">${details}</div>
+            </div>
+          `;
+        }).join('');
+
+        host.querySelectorAll('.country-head').forEach((button) => {
+          button.addEventListener('click', () => {
+            const country = button.getAttribute('data-country');
+            expandedCountry = expandedCountry === country ? null : country;
+            renderLocationsPanel();
+          });
+        });
+
+        host.querySelectorAll('.state-event').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const eventId = button.getAttribute('data-event-id');
+            if (eventId) selectEvent(eventId);
+            setLeftTab('recent');
+          });
+        });
       }
 
       async function fetchEarth3DArcGisSource() {
@@ -712,6 +1098,9 @@
           };
         }).filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lng));
 
+        locationsData = buildLocationsData(data);
+        renderLocationsPanel();
+
         glb
           .pointsData(eventsData)
           .pointLat('lat')
@@ -729,7 +1118,7 @@
         const mags = data.map((x) => Number(x.properties.mag || 0));
         const avg = mags.length ? mags.reduce((a, b) => a + b, 0) / mags.length : 0;
         const max = mags.length ? Math.max(...mags) : 0;
-        const countries = new Set(data.map((x) => countryFromPlace(x.properties.place))).size;
+        const countries = locationsData.filter((row) => row.total > 0).length;
 
         statsGrid.innerHTML = `
           <div class="stats-item"><small>Total Events</small><strong>${data.length}</strong></div>
@@ -762,6 +1151,8 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const autoRotateBtn = document.getElementById('autoRotateBtn');
+        const tabRecentBtn = document.getElementById('tabRecentBtn');
+        const tabLocationsBtn = document.getElementById('tabLocationsBtn');
         const zoomInBtn = document.getElementById('zoomInBtn');
         const zoomOutBtn = document.getElementById('zoomOutBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
@@ -781,6 +1172,9 @@
         autoRotateBtn.addEventListener('click', () => {
           setAutoRotation(!isAutoRotateEnabled);
         });
+
+        tabRecentBtn.addEventListener('click', () => setLeftTab('recent'));
+        tabLocationsBtn.addEventListener('click', () => setLeftTab('locations'));
 
         fullscreenBtn.addEventListener('click', async () => {
           if (document.fullscreenElement) {
@@ -812,6 +1206,7 @@
         });
 
         setAutoRotation(true);
+        setLeftTab(activeLeftTab);
       }
 
       bindControls();
