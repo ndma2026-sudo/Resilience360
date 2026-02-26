@@ -888,6 +888,21 @@ const getInfraModelImage = (id: string) =>
   infraModelImageModules[`./assets/infra-models/${id}.png`] ??
   ''
 
+const getInfraModelCardIcon = (model: Pick<InfraModel, 'id' | 'title'>) => {
+  const signature = `${model.id} ${model.title}`.toLowerCase()
+  if (signature.includes('flood')) return '🏠'
+  if (signature.includes('school')) return '🏫'
+  if (signature.includes('bridge')) return '🌉'
+  if (signature.includes('shelter')) return '🛟'
+  if (signature.includes('health')) return '🏥'
+  if (signature.includes('water')) return '💧'
+  if (signature.includes('utility')) return '⚡'
+  if (signature.includes('drainage') || signature.includes('sponge')) return '🛣️'
+  if (signature.includes('market')) return '🏬'
+  if (signature.includes('eoc') || signature.includes('operations')) return '📡'
+  return '🏗️'
+}
+
 const preloadedInfraModelSpecs: Omit<InfraModel, 'imageDataUrl'>[] = [
   {
     id: 'flood-housing-cluster-pk',
@@ -1783,6 +1798,11 @@ function App() {
     if (!infraModels.some((model) => model.id === selectedInfraModelId)) {
       setSelectedInfraModelId(null)
     }
+  }, [infraModels, selectedInfraModelId])
+
+  useEffect(() => {
+    if (selectedInfraModelId || infraModels.length === 0) return
+    setSelectedInfraModelId(infraModels[0].id)
   }, [infraModels, selectedInfraModelId])
 
   useEffect(() => {
@@ -4168,7 +4188,7 @@ function App() {
       const scoreSweep = Math.max(32, Math.min(180, Math.round((overallReadinessScore / 100) * 180)))
 
       return (
-        <div className="panel section-panel section-design-toolkit">
+        <div className="panel section-panel section-design-toolkit section-infra-models">
           <div className="design-toolkit-heading">
             <h2>{t.sections.designToolkit}</h2>
             <p>Smart resilience planning for your region.</p>
@@ -4741,41 +4761,63 @@ function App() {
 
           {infraModels.length > 0 && (
             <div className="infra-models-viewer">
-              <div className="infra-models-name-list" role="list" aria-label="Infra model names">
-                {infraModels.map((model) => (
-                  <button
-                    key={model.id}
-                    type="button"
-                    role="listitem"
-                    className={`infra-model-name-btn ${selectedInfraModelId === model.id ? 'is-active' : ''}`}
-                    onClick={() => setSelectedInfraModelId(model.id)}
-                  >
-                    {model.title}
-                  </button>
-                ))}
-              </div>
+              <aside className="infra-models-name-list" role="list" aria-label="Infra model names">
+                {infraModels.map((model) => {
+                  const isActive = selectedInfraModelId === model.id
+
+                  return (
+                    <button
+                      key={model.id}
+                      type="button"
+                      role="listitem"
+                      className={`infra-model-name-btn ${isActive ? 'is-active' : ''}`}
+                      onClick={() => setSelectedInfraModelId(model.id)}
+                    >
+                      <span className="infra-model-card-head">
+                        <span className="infra-model-card-icon" aria-hidden="true">
+                          {getInfraModelCardIcon(model)}
+                        </span>
+                        <span className="infra-model-card-title">{model.title}</span>
+                      </span>
+                      <span className="infra-model-card-points">
+                        <span>✔ {model.features[0] ?? model.description}</span>
+                        <span>✔ {model.features[1] ?? model.advantagesPakistan[0] ?? 'Pakistan-adaptable design'}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </aside>
 
               {selectedInfraModel ? (
-                <article className="retrofit-defect-card infra-model-detail-card">
-                  <h3>{selectedInfraModel.title}</h3>
-                  <p>{selectedInfraModel.description}</p>
-                  <img src={selectedInfraModel.imageDataUrl} alt={`${selectedInfraModel.title} AI visual`} className="retrofit-preview" />
-                  <h4>Key Features</h4>
-                  <ul>
-                    {selectedInfraModel.features.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                  <h4>Advantages in Pakistan</h4>
-                  <ul>
-                    {selectedInfraModel.advantagesPakistan.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
+                <article key={selectedInfraModel.id} className="infra-model-detail-card">
+                  <header className="infra-model-detail-head">
+                    <p>Model Name</p>
+                    <h3>{selectedInfraModel.title}</h3>
+                  </header>
+                  <p className="infra-model-detail-description">{selectedInfraModel.description}</p>
+                  <img src={selectedInfraModel.imageDataUrl} alt={`${selectedInfraModel.title} AI visual`} className="retrofit-preview infra-model-preview-image" />
+                  <div className="infra-model-insights-grid">
+                    <section className="infra-model-insight-card">
+                      <h4>Key Features</h4>
+                      <ul>
+                        {selectedInfraModel.features.map((item) => (
+                          <li key={item}>✔ {item}</li>
+                        ))}
+                      </ul>
+                    </section>
+                    <section className="infra-model-insight-card">
+                      <h4>Benefits for Pakistan</h4>
+                      <ul>
+                        {selectedInfraModel.advantagesPakistan.map((item) => (
+                          <li key={item}>✔ {item}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  </div>
                 </article>
               ) : (
                 <div className="retrofit-model-output infra-model-selection-hint">
-                  <p>Select a model name to view its image and description.</p>
+                  <p>Select a model to preview its image and resilience details.</p>
                 </div>
               )}
             </div>
