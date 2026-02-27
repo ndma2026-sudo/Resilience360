@@ -2730,6 +2730,10 @@ Return strict JSON schema:
   }
 })
 
+// Serve static frontend files from dist directory
+const distPath = path.join(repoRootDir, 'dist')
+app.use(express.static(distPath))
+
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && 'body' in error && req.path.startsWith('/api/')) {
     res.status(400).json({ error: 'Invalid JSON payload.' })
@@ -2740,6 +2744,16 @@ app.use((error, req, res, next) => {
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API route not found.' })
+})
+
+// SPA fallback: serve index.html for all non-API routes
+app.get('*', (_req, res) => {
+  const indexPath = path.join(distPath, 'index.html')
+  res.sendFile(indexPath, (error) => {
+    if (error) {
+      res.status(404).json({ error: 'Frontend not found. Build the frontend first with: npm run build' })
+    }
+  })
 })
 
 app.listen(port, () => {
