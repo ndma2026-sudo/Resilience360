@@ -223,6 +223,12 @@ input {
   color: #1d2530;
 }
 
+select option,
+select optgroup {
+  background: #ffffff;
+  color: #1d2530;
+}
+
 textarea {
   color: #1d2530;
 }
@@ -1124,6 +1130,9 @@ img {
 .section-design-toolkit .design-toolkit-cost-grid p {
   font-size: 0.86rem;
   padding: 8px 9px;
+  background: rgba(8, 21, 52, 0.74);
+  border-color: rgba(101, 133, 178, 0.48);
+  color: rgba(230, 243, 255, 0.95);
 }
 
 .section-design-toolkit .design-toolkit-actions {
@@ -1667,6 +1676,12 @@ img {
   border: 1px solid #d9e7f5;
   border-radius: 8px;
   padding: 10px;
+}
+
+.section-retrofit .retrofit-insights-grid p {
+  background: rgba(10, 16, 43, 0.82);
+  border-color: rgba(132, 112, 190, 0.48);
+  color: #ece7ff;
 }
 
 .retrofit-ai-guidance {
