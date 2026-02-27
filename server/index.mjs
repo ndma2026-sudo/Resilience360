@@ -3,7 +3,6 @@ import dotenv from 'dotenv'
 import express from 'express'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
-import mammoth from 'mammoth'
 import multer from 'multer'
 import path from 'node:path'
 import OpenAI from 'openai'
@@ -499,7 +498,8 @@ const getUploadedDocumentText = async (file) => {
     extension === '.docx' ||
     mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ) {
-    const parsed = await mammoth.extractRawText({ buffer: file.buffer })
+    const mammoth = await import('mammoth')
+    const parsed = await mammoth.default.extractRawText({ buffer: file.buffer })
     const text = String(parsed?.value ?? '').replace(/\s+/g, ' ').trim()
 
     if (!text) {
