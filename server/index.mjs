@@ -7,7 +7,7 @@ import mammoth from 'mammoth'
 import multer from 'multer'
 import path from 'node:path'
 import OpenAI from 'openai'
-import pdfParse from 'pdf-parse'
+import { PDFParse } from 'pdf-parse'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { predictRetrofitMl, retrainRetrofitMlModel } from './ml/retrofitMlModel.mjs'
@@ -406,8 +406,15 @@ const getUploadedDocumentText = async (file) => {
   const mime = String(file.mimetype ?? '').toLowerCase()
 
   if (extension === '.pdf' || mime === 'application/pdf') {
-    const parsed = await pdfParse(file.buffer)
-    const text = String(parsed?.text ?? '').replace(/\s+/g, ' ').trim()
+    const parser = new PDFParse({ data: file.buffer })
+    let text = ''
+
+    try {
+      const parsed = await parser.getText()
+      text = String(parsed?.text ?? '').replace(/\s+/g, ' ').trim()
+    } finally {
+      await parser.destroy().catch(() => undefined)
+    }
 
     if (!text) {
       throw new Error('Could not extract readable text from PDF. Please upload a text-based PDF or paste the text in the instruction box.')
