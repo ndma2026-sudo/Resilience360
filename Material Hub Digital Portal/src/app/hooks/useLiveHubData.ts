@@ -103,6 +103,20 @@ export function useLiveHubData(): LiveHubDataState {
     };
   }, [reload]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void reload();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [reload]);
+
   const inventory = useMemo<HubInventory[]>(() => {
     return hubs.map((hub) => {
       const hubEntries = entries

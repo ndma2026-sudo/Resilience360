@@ -402,6 +402,67 @@ const normalizeHubStatus = (value) => {
   return normalized === 'ready' || normalized === 'moderate' || normalized === 'critical' ? normalized : null
 }
 
+const normalizeAiAction = (value) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+
+  if (['create', 'add', 'insert', 'new'].includes(normalized)) {
+    return 'create'
+  }
+
+  if (['update', 'edit', 'modify', 'change', 'set', 'upsert'].includes(normalized)) {
+    return 'update'
+  }
+
+  if (['delete', 'remove', 'del', 'drop'].includes(normalized)) {
+    return 'delete'
+  }
+
+  return ''
+}
+
+const firstNonEmptyArray = (candidates) => {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      return candidate
+    }
+  }
+
+  return []
+}
+
+const extractHubOpsFromPayload = (payload) =>
+  firstNonEmptyArray([
+    payload?.hubOperations,
+    payload?.hubs,
+    payload?.hub_changes,
+    payload?.operations?.hubOperations,
+    payload?.operations?.hubs,
+    payload?.changes?.hubs,
+  ])
+
+const extractEntryOpsFromPayload = (payload) =>
+  firstNonEmptyArray([
+    payload?.entryOperations,
+    payload?.entries,
+    payload?.entry_changes,
+    payload?.operations?.entryOperations,
+    payload?.operations?.entries,
+    payload?.changes?.entries,
+  ])
+
+const extractOperationsFromDocumentText = (documentText) => {
+  if (!documentText) {
+    return { hubOps: [], entryOps: [] }
+  }
+
+  const parsed = extractJson(documentText)
+
+  return {
+    hubOps: extractHubOpsFromPayload(parsed),
+    entryOps: extractEntryOpsFromPayload(parsed),
+  }
+}
+
 const getUploadedDocumentText = async (file) => {
   if (!file) {
     return ''
@@ -1669,8 +1730,15 @@ app.post('/api/material-hubs/ai-agent', upload.single('document'), async (req, r
     const text = completion.choices[0]?.message?.content ?? ''
     const parsed = extractJson(text)
 
-    const hubOperations = safeArray(parsed.hubOperations).map((item) => ({
-      action: String(item?.action ?? '').toLowerCase(),
+    const aiHubOps = extractHubOpsFromPayload(parsed)
+    const aiEntryOps = extractEntryOpsFromPayload(parsed)
+    const docFallback = extractOperationsFromDocumentText(documentText)
+
+    const hubOpsSource = aiHubOps.length > 0 ? aiHubOps : docFallback.hubOps
+    const entryOpsSource = aiEntryOps.length > 0 ? aiEntryOps : docFallback.entryOps
+
+    const hubOperations = safeArray(hubOpsSource).map((item) => ({
+      action: normalizeAiAction(item?.action),
       hubId: item?.hubId ? String(item.hubId) : null,
       hubName: item?.hubName ? String(item.hubName) : null,
       name: item?.name ? String(item.name) : null,
@@ -1688,10 +1756,10 @@ app.post('/api/material-hubs/ai-agent', upload.single('document'), async (req, r
         item?.damagePercentage === null || item?.damagePercentage === undefined
           ? null
           : Math.max(0, Math.min(100, Number(item.damagePercentage) || 0)),
-    }))
+    })).filter((item) => item.action)
 
-    const entryOperations = safeArray(parsed.entryOperations).map((item) => ({
-      action: String(item?.action ?? '').toLowerCase(),
+    const entryOperations = safeArray(entryOpsSource).map((item) => ({
+      action: normalizeAiAction(item?.action),
       entryId: item?.entryId ? String(item.entryId) : null,
       hubId: item?.hubId ? String(item.hubId) : null,
       hubName: item?.hubName ? String(item.hubName) : null,
@@ -1701,14 +1769,23 @@ app.post('/api/material-hubs/ai-agent', upload.single('document'), async (req, r
       received: item?.received === null || item?.received === undefined ? null : Math.max(0, Number(item.received) || 0),
       issued: item?.issued === null || item?.issued === undefined ? null : Math.max(0, Number(item.issued) || 0),
       damaged: item?.damaged === null || item?.damaged === undefined ? null : Math.max(0, Number(item.damaged) || 0),
-    }))
+    })).filter((item) => item.action)
+
+    const baseRisks = safeArray(parsed.risks).map((item) => String(item))
+    const risks =
+      hubOperations.length === 0 && entryOperations.length === 0
+        ? [
+            ...baseRisks,
+            'No actionable operations were generated. Upload a structured JSON with hubOperations/entryOperations or provide clearer update instructions with exact hub/material names.',
+          ]
+        : baseRisks
 
     res.json({
       model,
       analyzedAt: new Date().toISOString(),
       summary: String(parsed.summary ?? ''),
       confidence: Math.max(0, Math.min(1, Number(parsed.confidence ?? 0.6) || 0.6)),
-      risks: safeArray(parsed.risks).map((item) => String(item)),
+      risks,
       hubOperations,
       entryOperations,
     })

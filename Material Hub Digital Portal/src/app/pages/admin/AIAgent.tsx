@@ -59,6 +59,14 @@ export function AIAgent() {
   const [analysisResult, setAnalysisResult] = useState<AiMaterialHubResponse | null>(null);
   const [applyLogs, setApplyLogs] = useState<string[]>([]);
 
+  const totalPlannedOperations = useMemo(() => {
+    if (!analysisResult) {
+      return 0;
+    }
+
+    return analysisResult.hubOperations.length + analysisResult.entryOperations.length;
+  }, [analysisResult]);
+
   const flattenedEntries = useMemo(
     () => inventory.flatMap((hubInventory) => hubInventory.materials),
     [inventory],
@@ -144,6 +152,11 @@ export function AIAgent() {
       });
 
       setAnalysisResult(result);
+      if (result.hubOperations.length === 0 && result.entryOperations.length === 0) {
+        setAnalysisError(
+          'AI returned no actionable edits. Use exact hub/material names and quantities, or upload structured JSON with hubOperations/entryOperations.',
+        );
+      }
     } catch (caught) {
       setAnalysisResult(null);
       setAnalysisError(caught instanceof Error ? caught.message : 'AI analysis failed.');
@@ -370,6 +383,11 @@ export function AIAgent() {
         </button>
 
         {analysisError && <p className="text-red-600 text-sm">{analysisError}</p>}
+        {!analysisError && analysisResult && totalPlannedOperations === 0 && (
+          <p className="text-amber-700 text-sm">
+            No edit operations were generated. Refine instruction or upload structured JSON to apply live changes.
+          </p>
+        )}
       </div>
 
       {analysisResult && (
@@ -383,6 +401,8 @@ export function AIAgent() {
               Confidence: {Math.round((analysisResult.confidence ?? 0) * 100)}%
             </div>
           </div>
+
+          <p className="text-sm text-gray-600">Planned operations: {totalPlannedOperations}</p>
 
           <p className="text-gray-700">{analysisResult.summary || 'No summary returned.'}</p>
 
