@@ -5322,110 +5322,122 @@ function App() {
     if (activeSection === 'retrofit') {
       return (
         <div className="panel section-panel section-retrofit">
-          <h2>{t.sections.retrofit}</h2>
-          <div className="inline-controls">
-            <label>
-              Construction Type
-              <select value={structureType} onChange={(event) => setStructureType(event.target.value)}>
-                <option>Masonry House</option>
-                <option>RC Frame</option>
-                <option>School Block</option>
-                <option>Bridge Approach</option>
-              </select>
-            </label>
+          <div className="retrofit-title-row">
+            <h2>🏠 Retrofit Guide</h2>
           </div>
 
-          <div className="retrofit-model-output">
-            <h3>Location for Labor/Material Rates</h3>
-            <div className="retrofit-action-row" role="group" aria-label="Retrofit location mode">
-              <button
-                type="button"
-                onClick={() => {
-                  setRetrofitLocationMode('auto')
-                  requestCurrentUserLocation()
-                }}
-                disabled={isDetectingLocation}
-              >
-                {isDetectingLocation ? '📡 Detecting Location...' : '📡 Use My Location'}
-              </button>
-              <button type="button" onClick={() => setRetrofitLocationMode('manual')}>
-                ✍️ Enter Location Manually
-              </button>
+          <div className="retrofit-main-card">
+            <div className="inline-controls retrofit-construction-control">
+              <label>
+                Construction Type
+                <select value={structureType} onChange={(event) => setStructureType(event.target.value)}>
+                  <option>Masonry House</option>
+                  <option>RC Frame</option>
+                  <option>School Block</option>
+                  <option>Bridge Approach</option>
+                </select>
+              </label>
             </div>
-            {retrofitLocationMode === 'manual' ? (
-              <div className="inline-controls">
-                <label>
-                  Province (Pakistan)
-                  <select
-                    value={retrofitManualProvince}
-                    onChange={(event) => {
-                      const province = event.target.value
-                      setRetrofitManualProvince(province)
-                      setRetrofitManualCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
-                    }}
-                  >
-                    {Object.keys(provinceRisk).map((province) => (
-                      <option key={province}>{province}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  City / District (Pakistan)
-                  <select value={retrofitManualCity} onChange={(event) => setRetrofitManualCity(event.target.value)}>
-                    {availableRetrofitManualCities.map((city) => (
-                      <option key={city}>{city}</option>
-                    ))}
-                  </select>
-                </label>
+
+            <div className="retrofit-model-output retrofit-location-card">
+              <h3>Location for Labor/Material Rates</h3>
+              <div className="retrofit-action-row retrofit-location-actions" role="group" aria-label="Retrofit location mode">
+                <button
+                  type="button"
+                  className="retrofit-btn retrofit-btn-primary"
+                  onClick={() => {
+                    setRetrofitLocationMode('auto')
+                    requestCurrentUserLocation()
+                  }}
+                  disabled={isDetectingLocation}
+                >
+                  {isDetectingLocation ? '📡 Detecting Location...' : '📍 Use My Location'}
+                </button>
+                <button type="button" className="retrofit-btn retrofit-btn-secondary" onClick={() => setRetrofitLocationMode('manual')}>
+                  📍 Enter Location Manually
+                </button>
               </div>
-            ) : (
-              <p>
-                Auto Location Target: <strong>{selectedProvince}</strong> / <strong>{retrofitCity || 'Nearest city'}</strong>
-                {detectedUserLocation && (
-                  <>
-                    {' '}
-                    (GPS: {detectedUserLocation.lat.toFixed(4)}, {detectedUserLocation.lng.toFixed(4)})
-                  </>
-                )}
+              {retrofitLocationMode === 'manual' ? (
+                <div className="inline-controls retrofit-manual-controls">
+                  <label>
+                    Province (Pakistan)
+                    <select
+                      value={retrofitManualProvince}
+                      onChange={(event) => {
+                        const province = event.target.value
+                        setRetrofitManualProvince(province)
+                        setRetrofitManualCity((pakistanCitiesByProvince[province] ?? [])[0] ?? '')
+                      }}
+                    >
+                      {Object.keys(provinceRisk).map((province) => (
+                        <option key={province}>{province}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    City / District (Pakistan)
+                    <select value={retrofitManualCity} onChange={(event) => setRetrofitManualCity(event.target.value)}>
+                      {availableRetrofitManualCities.map((city) => (
+                        <option key={city}>{city}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <p className="retrofit-location-target">
+                  Auto Location Target: <strong>{selectedProvince}</strong> / <strong>{retrofitCity || 'Nearest city'}</strong>
+                  {detectedUserLocation && (
+                    <>
+                      {' '}
+                      (GPS: {detectedUserLocation.lat.toFixed(4)}, {detectedUserLocation.lng.toFixed(4)})
+                    </>
+                  )}
+                </p>
+              )}
+              {locationAccessMsg && <p className="retrofit-location-msg">{locationAccessMsg}</p>}
+            </div>
+
+            <label className="retrofit-upload-label">
+              Upload Defect Photos in Series (Image 1, 2, 3...)
+              <input
+                ref={retrofitUploadInputRef}
+                className="retrofit-upload-input"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => {
+                  handleRetrofitSeriesUpload(event.target.files)
+                  event.currentTarget.value = ''
+                }}
+              />
+            </label>
+
+            {retrofitImageSeriesFiles.length > 0 && (
+              <p className="retrofit-selected-photos">
+                Selected Photos: <strong>{retrofitImageSeriesFiles.length}</strong>
               </p>
             )}
-            {locationAccessMsg && <p>{locationAccessMsg}</p>}
-          </div>
 
-          <label>
-            Upload Defect Photos in Series (Image 1, 2, 3...)
-            <input
-              ref={retrofitUploadInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(event) => {
-                handleRetrofitSeriesUpload(event.target.files)
-                event.currentTarget.value = ''
-              }}
-            />
-          </label>
-
-          {retrofitImageSeriesFiles.length > 0 && (
-            <p>
-              Selected Photos: <strong>{retrofitImageSeriesFiles.length}</strong>
-            </p>
-          )}
-
-          <div className="retrofit-action-row" role="group" aria-label="Retrofit estimate actions">
-            <button
-              onClick={() => void generateRetrofitGuidanceFromSeries()}
-              disabled={isGeneratingRetrofitGuidance}
-            >
-              {isGeneratingRetrofitGuidance
-                ? '🔄 Analyzing Images + Generating Guidance...'
-                : '🛠️ Retrofit Guidance'}
-            </button>
-            <button onClick={() => void calculateRetrofitEstimateFromSeries()} disabled={isCalculatingRetrofitEstimate}>
-              {isCalculatingRetrofitEstimate
-                ? '🔄 Analyzing Images + Running ML Cost Estimator...'
-                : '🧮 Calculate Retrofit Estimated Cost'}
-            </button>
+            <div className="retrofit-action-row retrofit-action-row-main" role="group" aria-label="Retrofit estimate actions">
+              <button
+                className="retrofit-btn retrofit-btn-primary"
+                onClick={() => void generateRetrofitGuidanceFromSeries()}
+                disabled={isGeneratingRetrofitGuidance}
+              >
+                {isGeneratingRetrofitGuidance
+                  ? '🔄 Analyzing Images + Generating Guidance...'
+                  : '🛠️ Retrofit Guidance'}
+              </button>
+              <button
+                className="retrofit-btn retrofit-btn-secondary"
+                onClick={() => void calculateRetrofitEstimateFromSeries()}
+                disabled={isCalculatingRetrofitEstimate}
+              >
+                {isCalculatingRetrofitEstimate
+                  ? '🔄 Analyzing Images + Running ML Cost Estimator...'
+                  : '🧮 Calculate Retrofit Estimated Cost'}
+              </button>
+            </div>
           </div>
 
           {isCalculatingRetrofitEstimate && (

@@ -1561,9 +1561,74 @@ img {
   margin-top: 0;
 }
 
+.section-retrofit {
+  background:
+    linear-gradient(180deg, rgba(20, 12, 56, 0.78) 0%, rgba(14, 10, 43, 0.72) 100%),
+    radial-gradient(circle at 12% 18%, rgba(125, 192, 255, 0.14), transparent 46%),
+    radial-gradient(circle at 85% 86%, rgba(255, 194, 108, 0.15), transparent 45%);
+  border: 1px solid rgba(187, 153, 228, 0.42);
+  box-shadow: 0 16px 34px rgba(8, 5, 26, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(2px);
+}
+
+.section-retrofit h2,
+.section-retrofit h3,
+.section-retrofit h4,
+.section-retrofit p,
+.section-retrofit li,
+.section-retrofit label,
+.section-retrofit strong {
+  color: #f1ebff;
+}
+
+.retrofit-title-row {
+  margin-bottom: 10px;
+}
+
+.section-retrofit .retrofit-title-row h2 {
+  margin: 0;
+  font-size: clamp(1.52rem, 1.3rem + 0.86vw, 2rem);
+  letter-spacing: -0.015em;
+}
+
+.retrofit-main-card {
+  border: 1px solid rgba(163, 132, 215, 0.52);
+  border-radius: 14px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(25, 16, 65, 0.84) 0%, rgba(16, 11, 47, 0.8) 100%),
+    radial-gradient(circle at top right, rgba(120, 196, 255, 0.14), transparent 45%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.section-retrofit .inline-controls {
+  background: rgba(20, 13, 52, 0.55);
+  border: 1px solid rgba(150, 128, 212, 0.42);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.section-retrofit .inline-controls label {
+  color: rgba(235, 228, 255, 0.95);
+}
+
+.section-retrofit select,
+.section-retrofit input[type='text'],
+.section-retrofit input[type='number'] {
+  border: 1px solid rgba(160, 187, 245, 0.5);
+  background: linear-gradient(180deg, rgba(20, 30, 73, 0.95) 0%, rgba(13, 20, 56, 0.9) 100%);
+  color: #eff5ff;
+}
+
+.section-retrofit select:focus,
+.section-retrofit input:focus {
+  border-color: rgba(132, 208, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(91, 167, 255, 0.25);
+}
+
 .section-retrofit ol {
-  background: #f8fcff;
-  border: 1px solid #dceaf7;
+  background: rgba(13, 11, 35, 0.72);
+  border: 1px solid rgba(153, 130, 210, 0.35);
   border-radius: 10px;
   padding: var(--space-3) var(--space-4) var(--space-2) 24px;
 }
@@ -1617,14 +1682,26 @@ img {
 
 .retrofit-model-output {
   margin-top: var(--space-3);
-  border: 1px solid #cfe2f4;
+  border: 1px solid rgba(151, 128, 208, 0.4);
   border-radius: 10px;
   padding: var(--space-3);
-  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  background: linear-gradient(180deg, rgba(25, 16, 62, 0.74) 0%, rgba(16, 12, 45, 0.68) 100%);
   transition:
     transform var(--motion-base) var(--ease-standard),
     box-shadow var(--motion-base) var(--ease-standard),
     border-color var(--motion-base) var(--ease-standard);
+}
+
+.retrofit-location-card {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.retrofit-location-target,
+.retrofit-location-msg,
+.retrofit-selected-photos {
+  margin: 0 0 10px;
+  color: rgba(233, 228, 255, 0.92);
 }
 
 .retrofit-model-output h3 {
@@ -1638,10 +1715,10 @@ img {
 }
 
 .retrofit-defect-card {
-  border: 1px solid #d5e5f3;
+  border: 1px solid rgba(146, 126, 198, 0.5);
   border-radius: 8px;
   padding: 10px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, rgba(24, 17, 57, 0.9) 0%, rgba(16, 12, 41, 0.84) 100%);
   transition:
     transform var(--motion-base) var(--ease-standard),
     box-shadow var(--motion-base) var(--ease-standard),
@@ -1651,7 +1728,7 @@ img {
 .retrofit-defect-card h4 {
   margin: 0 0 6px;
   font-size: 0.95rem;
-  color: #1f5078;
+  color: #f4eeff;
 }
 
 .retrofit-defect-card p {
@@ -1678,6 +1755,38 @@ img {
 .retrofit-action-row button {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.retrofit-btn {
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.section-retrofit .retrofit-btn-primary {
+  background: linear-gradient(180deg, #2c79b8 0%, #1d4f82 100%);
+  border-color: rgba(117, 197, 255, 0.7);
+  box-shadow: 0 8px 16px rgba(7, 28, 61, 0.5);
+}
+
+.section-retrofit .retrofit-btn-secondary {
+  background: linear-gradient(180deg, #c9902f 0%, #8b5b13 100%);
+  border-color: rgba(255, 210, 117, 0.82);
+  box-shadow: 0 8px 16px rgba(53, 29, 3, 0.45);
+}
+
+.section-retrofit .retrofit-btn-primary:hover,
+.section-retrofit .retrofit-btn-secondary:hover {
+  filter: brightness(1.07);
+}
+
+.retrofit-upload-label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.retrofit-upload-input {
+  margin-top: 8px;
 }
 
 .section-settings {
