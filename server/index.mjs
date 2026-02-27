@@ -3,9 +3,11 @@ import dotenv from 'dotenv'
 import express from 'express'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
+import mammoth from 'mammoth'
 import multer from 'multer'
 import path from 'node:path'
 import OpenAI from 'openai'
+import pdfParse from 'pdf-parse'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { predictRetrofitMl, retrainRetrofitMlModel } from './ml/retrofitMlModel.mjs'
@@ -395,9 +397,41 @@ const parseJsonBodyField = (value, fallback = null) => {
   }
 }
 
-const getUploadedDocumentText = (file) => {
+const getUploadedDocumentText = async (file) => {
   if (!file) {
     return ''
+  }
+
+  const extension = path.extname(String(file.originalname ?? '')).toLowerCase()
+  const mime = String(file.mimetype ?? '').toLowerCase()
+
+  if (extension === '.pdf' || mime === 'application/pdf') {
+    const parsed = await pdfParse(file.buffer)
+    const text = String(parsed?.text ?? '').replace(/\s+/g, ' ').trim()
+
+    if (!text) {
+      throw new Error('Could not extract readable text from PDF. Please upload a text-based PDF or paste the text in the instruction box.')
+    }
+
+    return text.slice(0, 120_000)
+  }
+
+  if (
+    extension === '.docx' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    const parsed = await mammoth.extractRawText({ buffer: file.buffer })
+    const text = String(parsed?.value ?? '').replace(/\s+/g, ' ').trim()
+
+    if (!text) {
+      throw new Error('Could not extract readable text from DOCX. Please verify the file or paste text directly in the instruction box.')
+    }
+
+    return text.slice(0, 120_000)
+  }
+
+  if (extension === '.doc' || mime === 'application/msword') {
+    throw new Error('Legacy .doc files are not supported for automatic extraction yet. Please save as .docx or PDF and upload again.')
   }
 
   const raw = file.buffer.toString('utf8')
@@ -405,7 +439,7 @@ const getUploadedDocumentText = (file) => {
   const printableRatio = raw.length > 0 ? printableLength / raw.length : 1
 
   if (printableRatio < 0.55) {
-    throw new Error('Unsupported document encoding. Please upload UTF-8 text/CSV/JSON or paste extracted text in the instruction box.')
+    throw new Error('Unsupported document encoding. Please upload UTF-8 text/CSV/JSON/Markdown/log, PDF, DOCX, or paste extracted text in the instruction box.')
   }
 
   return raw.slice(0, 120_000)
@@ -1568,7 +1602,7 @@ app.post('/api/material-hubs/ai-agent', upload.single('document'), async (req, r
     const instruction = String(req.body.instruction ?? '').trim()
     const hubs = safeArray(parseJsonBodyField(req.body.hubs, []))
     const inventory = safeArray(parseJsonBodyField(req.body.inventory, []))
-    const documentText = getUploadedDocumentText(req.file)
+    const documentText = await getUploadedDocumentText(req.file)
 
     if (!instruction && !documentText) {
       res.status(400).json({ error: 'Provide an admin instruction or upload a document for analysis.' })

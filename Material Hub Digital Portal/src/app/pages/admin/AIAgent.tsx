@@ -282,7 +282,7 @@ export function AIAgent() {
             <input
               type="file"
               className="hidden"
-              accept=".txt,.csv,.json,.md,.log"
+              accept=".txt,.csv,.json,.md,.log,.pdf,.docx,.doc"
               onChange={(event) => {
                 setFile(event.target.files?.[0] ?? null);
               }}
@@ -290,7 +290,7 @@ export function AIAgent() {
           </label>
 
           <p className="text-sm text-gray-500">
-            {file ? `Selected: ${file.name}` : 'No file selected. Supported: txt/csv/json/md/log (UTF-8).'}
+            {file ? `Selected: ${file.name}` : 'No file selected. Supported: txt/csv/json/md/log, PDF, DOCX (DOC may need conversion).'}
           </p>
         </div>
 
