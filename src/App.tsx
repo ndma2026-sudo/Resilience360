@@ -1434,6 +1434,9 @@ function App() {
   const [showTrainingPrograms] = useState(false)
   const [activeLearnVideoFile, setActiveLearnVideoFile] = useState<string | null>(null)
   const [isLearnVideoVisible, setIsLearnVideoVisible] = useState(false)
+  const [learnVideoPlaybackSrc, setLearnVideoPlaybackSrc] = useState('')
+  const [infraLayoutPlaybackSrc, setInfraLayoutPlaybackSrc] = useState('')
+  const [learnVideoSourceIndex, setLearnVideoSourceIndex] = useState(0)
   const learnVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const t = translations[language]
@@ -1459,8 +1462,142 @@ function App() {
 
   const openLearnVideoPlayer = useCallback((fileName: string) => {
     setActiveLearnVideoFile(fileName)
+    setLearnVideoSourceIndex(0)
     setIsLearnVideoVisible(true)
   }, [])
+
+  const activeLearnVideoSourceCandidates = useMemo(() => {
+    if (!activeLearnVideo) return []
+
+    const basePath = import.meta.env.BASE_URL
+    const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`
+    const relativePath = `videos/iapd-web/${activeLearnVideo.fileName}`
+    const cacheBypassQuery = '?play=1'
+
+    return [
+      `${normalizedBasePath}${relativePath}${cacheBypassQuery}`,
+      `/${relativePath}${cacheBypassQuery}`,
+      `${relativePath}${cacheBypassQuery}`,
+      `${normalizedBasePath}${relativePath}`,
+      `/${relativePath}`,
+      relativePath,
+    ]
+  }, [activeLearnVideo])
+
+  const activeLearnVideoSrc = activeLearnVideoSourceCandidates[learnVideoSourceIndex] ?? ''
+
+  const infraLayoutVideoSourceCandidates = useMemo(() => {
+    const basePath = import.meta.env.BASE_URL
+    const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`
+    const relativePath = 'videos/layout.mp4'
+    const cacheBypassQuery = '?play=1'
+
+    return [
+      `${normalizedBasePath}${relativePath}${cacheBypassQuery}`,
+      `/${relativePath}${cacheBypassQuery}`,
+      `${relativePath}${cacheBypassQuery}`,
+      `${normalizedBasePath}${relativePath}`,
+      `/${relativePath}`,
+      relativePath,
+    ]
+  }, [])
+
+  const handleLearnVideoLoadError = useCallback(() => {
+    setLearnVideoSourceIndex((previous) => {
+      if (previous >= activeLearnVideoSourceCandidates.length - 1) {
+        return previous
+      }
+      return previous + 1
+    })
+  }, [activeLearnVideoSourceCandidates])
+
+  useEffect(() => {
+    if (!isLearnVideoVisible || activeLearnVideoSourceCandidates.length === 0) {
+      setLearnVideoPlaybackSrc('')
+      return
+    }
+
+    let isCancelled = false
+    let objectUrl: string | null = null
+
+    const loadLearnVideo = async () => {
+      for (let index = 0; index < activeLearnVideoSourceCandidates.length; index += 1) {
+        const candidate = activeLearnVideoSourceCandidates[index]
+        if (!candidate) continue
+
+        try {
+          const response = await fetch(candidate, { cache: 'no-store' })
+          if (!response.ok) continue
+
+          const videoBlob = await response.blob()
+          if (isCancelled) return
+
+          objectUrl = URL.createObjectURL(videoBlob)
+          setLearnVideoSourceIndex(index)
+          setLearnVideoPlaybackSrc(objectUrl)
+          return
+        } catch {
+          continue
+        }
+      }
+
+      if (!isCancelled) {
+        setLearnVideoPlaybackSrc(activeLearnVideoSourceCandidates[0] ?? '')
+      }
+    }
+
+    void loadLearnVideo()
+
+    return () => {
+      isCancelled = true
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [activeLearnVideoSourceCandidates, isLearnVideoVisible])
+
+  useEffect(() => {
+    if (!showInfraLayoutVideo || infraLayoutVideoSourceCandidates.length === 0) {
+      setInfraLayoutPlaybackSrc('')
+      return
+    }
+
+    let isCancelled = false
+    let objectUrl: string | null = null
+
+    const loadInfraLayoutVideo = async () => {
+      for (const candidate of infraLayoutVideoSourceCandidates) {
+        if (!candidate) continue
+
+        try {
+          const response = await fetch(candidate, { cache: 'no-store' })
+          if (!response.ok) continue
+
+          const videoBlob = await response.blob()
+          if (isCancelled) return
+
+          objectUrl = URL.createObjectURL(videoBlob)
+          setInfraLayoutPlaybackSrc(objectUrl)
+          return
+        } catch {
+          continue
+        }
+      }
+
+      if (!isCancelled) {
+        setInfraLayoutPlaybackSrc(infraLayoutVideoSourceCandidates[0] ?? '')
+      }
+    }
+
+    void loadInfraLayoutVideo()
+
+    return () => {
+      isCancelled = true
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [infraLayoutVideoSourceCandidates, showInfraLayoutVideo])
 
   const openLearnVideoFullscreen = useCallback(() => {
     const videoElement = learnVideoRef.current as
@@ -4522,7 +4659,7 @@ function App() {
                   onContextMenu={(event) => event.preventDefault()}
                   preload="metadata"
                 >
-                  <source src={infraLayoutVideoSrc} type="video/mp4" />
+                  <source src={infraLayoutPlaybackSrc || infraLayoutVideoSrc} type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
                 <p>
@@ -5847,12 +5984,14 @@ function App() {
                 className="infra-layout-video learn-training-video"
                 controls
                 autoPlay
+                playsInline
                 controlsList="nodownload noplaybackrate noremoteplayback"
                 disablePictureInPicture
                 onContextMenu={(event) => event.preventDefault()}
+                onError={handleLearnVideoLoadError}
                 preload="metadata"
               >
-                <source src={`${import.meta.env.BASE_URL}videos/iapd-web/${activeLearnVideo.fileName}`} type="video/mp4" />
+                <source src={learnVideoPlaybackSrc || activeLearnVideoSrc} type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
               <div className="learn-video-player-actions">
