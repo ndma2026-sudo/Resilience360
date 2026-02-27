@@ -1441,6 +1441,7 @@ function App() {
     slopeStabilityEstimator: false,
     designKitCostEstimator: false,
     selfAssessment: false,
+    riskFloodClimateExplorer: false,
     warningWhatToDoNow: false,
     warningEmergencyToolkit: false,
     pmdLiveWeather: false,
@@ -4105,71 +4106,80 @@ function App() {
 
           <div className="risk-insights-grid">
             <div className="retrofit-model-output risk-card risk-climate-card">
-              <h3>🌦️ Flood &amp; Climate Risk Explorer</h3>
-              <div className="inline-controls">
-                <label>
-                  Enter Location
-                  <input
-                    value={climateLocationInput}
-                    onChange={(event) => setClimateLocationInput(event.target.value)}
-                    placeholder="City / Area"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void loadLiveClimateByCity(climateLocationInput)
-                  }}
-                  disabled={isLoadingLiveClimate}
-                >
-                  {isLoadingLiveClimate ? 'Applying...' : 'Apply Location'}
+              <h3>
+                <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('riskFloodClimateExplorer')} aria-expanded={expandedPanels.riskFloodClimateExplorer}>
+                  <span>🌦️ Flood &amp; Climate Risk Explorer</span>
+                  <span>{expandedPanels.riskFloodClimateExplorer ? '▾' : '▸'}</span>
                 </button>
-              </div>
-              {liveClimateError && <p>{liveClimateError}</p>}
-              {liveClimateSnapshot && (
-                <p>
-                  Live source: <strong>{liveClimateSnapshot.source}</strong> • Updated:{' '}
-                  <strong>{new Date(liveClimateSnapshot.updatedAt).toLocaleString()}</strong>
-                </p>
+              </h3>
+              {expandedPanels.riskFloodClimateExplorer && (
+                <>
+                  <div className="inline-controls">
+                    <label>
+                      Enter Location
+                      <input
+                        value={climateLocationInput}
+                        onChange={(event) => setClimateLocationInput(event.target.value)}
+                        placeholder="City / Area"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void loadLiveClimateByCity(climateLocationInput)
+                      }}
+                      disabled={isLoadingLiveClimate}
+                    >
+                      {isLoadingLiveClimate ? 'Applying...' : 'Apply Location'}
+                    </button>
+                  </div>
+                  {liveClimateError && <p>{liveClimateError}</p>}
+                  {liveClimateSnapshot && (
+                    <p>
+                      Live source: <strong>{liveClimateSnapshot.source}</strong> • Updated:{' '}
+                      <strong>{new Date(liveClimateSnapshot.updatedAt).toLocaleString()}</strong>
+                    </p>
+                  )}
+                  <p>
+                    Risk Score: <strong>{displayedClimateRiskScore}/100</strong>
+                  </p>
+                  <p>
+                    Heatwave Risk Zone: <strong>{displayedHeatwaveRiskZone}</strong>
+                  </p>
+                  <p>
+                    Air Quality Level: <strong>{displayedAirQualityLevel}</strong>
+                  </p>
+                  {liveClimateSnapshot && (
+                    <p>
+                      Temperature / Feels Like: <strong>{liveClimateSnapshot.metrics.temperatureC.toFixed(1)}°C / {liveClimateSnapshot.metrics.apparentTemperatureC.toFixed(1)}°C</strong>{' '}
+                      • Rain Chance: <strong>{Math.round(liveClimateSnapshot.metrics.precipitationProbability)}%</strong> • AQI:{' '}
+                      <strong>{Math.round(liveClimateSnapshot.metrics.usAqi)}</strong>
+                    </p>
+                  )}
+                  <p>
+                    Safe Shelters Nearby: <strong>{nearbyShelters.length || 'No mapped shelter in current district'}</strong>
+                  </p>
+                  {nearbyShelters.length > 0 && (
+                    <ul>
+                      {nearbyShelters.slice(0, 3).map((asset) => (
+                        <li key={asset.name}>{asset.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <h4>Precautions</h4>
+                  <ul>
+                    {displayedClimatePrecautions.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  <h4>Emergency Contacts</h4>
+                  <ul>
+                    {selectedDistrictContacts.map((contact) => (
+                      <li key={contact}>{contact}</li>
+                    ))}
+                  </ul>
+                </>
               )}
-              <p>
-                Risk Score: <strong>{displayedClimateRiskScore}/100</strong>
-              </p>
-              <p>
-                Heatwave Risk Zone: <strong>{displayedHeatwaveRiskZone}</strong>
-              </p>
-              <p>
-                Air Quality Level: <strong>{displayedAirQualityLevel}</strong>
-              </p>
-              {liveClimateSnapshot && (
-                <p>
-                  Temperature / Feels Like: <strong>{liveClimateSnapshot.metrics.temperatureC.toFixed(1)}°C / {liveClimateSnapshot.metrics.apparentTemperatureC.toFixed(1)}°C</strong>{' '}
-                  • Rain Chance: <strong>{Math.round(liveClimateSnapshot.metrics.precipitationProbability)}%</strong> • AQI:{' '}
-                  <strong>{Math.round(liveClimateSnapshot.metrics.usAqi)}</strong>
-                </p>
-              )}
-              <p>
-                Safe Shelters Nearby: <strong>{nearbyShelters.length || 'No mapped shelter in current district'}</strong>
-              </p>
-              {nearbyShelters.length > 0 && (
-                <ul>
-                  {nearbyShelters.slice(0, 3).map((asset) => (
-                    <li key={asset.name}>{asset.name}</li>
-                  ))}
-                </ul>
-              )}
-              <h4>Precautions</h4>
-              <ul>
-                {displayedClimatePrecautions.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              <h4>Emergency Contacts</h4>
-              <ul>
-                {selectedDistrictContacts.map((contact) => (
-                  <li key={contact}>{contact}</li>
-                ))}
-              </ul>
             </div>
 
             <div className="risk-side-stack">
