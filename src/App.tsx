@@ -1442,6 +1442,10 @@ function App() {
     designKitCostEstimator: false,
     selfAssessment: false,
     riskFloodClimateExplorer: false,
+    riskLocalAdvisoryChatbot: false,
+    riskBuildBetterMaterialsGuide: false,
+    designSafeShelterCapacityPlanner: false,
+    designRecommendedFoundation: false,
     warningWhatToDoNow: false,
     warningEmergencyToolkit: false,
     pmdLiveWeather: false,
@@ -4200,33 +4204,42 @@ function App() {
               </div>
 
               <div className="retrofit-model-output risk-card risk-chatbot-card">
-                <h3>Local Advisory Chatbot</h3>
-                <p>Ask for district-level action advice, retrofit priorities, or hazard-specific guidance.</p>
-                <div className="inline-controls">
-                  <input
-                    type="text"
-                    value={advisoryQuestion}
-                    onChange={(event) => setAdvisoryQuestion(event.target.value)}
-                    placeholder="e.g., What should schools in this district do before monsoon?"
-                  />
-                  <button onClick={() => { void sendLocalAdvisoryQuestion() }} disabled={isAskingAdvisory}>
-                    {isAskingAdvisory ? '💬 Thinking...' : '💬 Ask'}
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('riskLocalAdvisoryChatbot')} aria-expanded={expandedPanels.riskLocalAdvisoryChatbot}>
+                    <span>Local Advisory Chatbot</span>
+                    <span>{expandedPanels.riskLocalAdvisoryChatbot ? '▾' : '▸'}</span>
                   </button>
-                </div>
-                {advisoryError && <p>{advisoryError}</p>}
-                {advisoryMessages.length > 0 && (
-                  <div>
-                    {advisoryMessages.slice(-6).map((message, idx) => (
-                      <p key={`${message.role}-${idx}`}>
-                        <strong>{message.role === 'user' ? 'You' : 'Advisor'}:</strong> {message.text}
-                      </p>
-                    ))}
+                </h3>
+                {expandedPanels.riskLocalAdvisoryChatbot && (
+                  <>
+                    <p>Ask for district-level action advice, retrofit priorities, or hazard-specific guidance.</p>
                     <div className="inline-controls">
-                      <button onClick={downloadLatestAdvisoryAnswerPdf}>📄 Download Latest Answer (PDF)</button>
-                      <button onClick={() => { void copyLatestAdvisoryAnswer() }}>📋 Copy Answer</button>
+                      <input
+                        type="text"
+                        value={advisoryQuestion}
+                        onChange={(event) => setAdvisoryQuestion(event.target.value)}
+                        placeholder="e.g., What should schools in this district do before monsoon?"
+                      />
+                      <button onClick={() => { void sendLocalAdvisoryQuestion() }} disabled={isAskingAdvisory}>
+                        {isAskingAdvisory ? '💬 Thinking...' : '💬 Ask'}
+                      </button>
                     </div>
-                    {advisoryCopyMsg && <p>{advisoryCopyMsg}</p>}
-                  </div>
+                    {advisoryError && <p>{advisoryError}</p>}
+                    {advisoryMessages.length > 0 && (
+                      <div>
+                        {advisoryMessages.slice(-6).map((message, idx) => (
+                          <p key={`${message.role}-${idx}`}>
+                            <strong>{message.role === 'user' ? 'You' : 'Advisor'}:</strong> {message.text}
+                          </p>
+                        ))}
+                        <div className="inline-controls">
+                          <button onClick={downloadLatestAdvisoryAnswerPdf}>📄 Download Latest Answer (PDF)</button>
+                          <button onClick={() => { void copyLatestAdvisoryAnswer() }}>📋 Copy Answer</button>
+                        </div>
+                        {advisoryCopyMsg && <p>{advisoryCopyMsg}</p>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -4287,18 +4300,27 @@ function App() {
           )}
 
           <div className="retrofit-model-output risk-card">
-            <h3>🧱 Build Better: Local Materials Guide</h3>
-            <p>
-              Recommended: <strong>{localMaterialGuide.recommended.join(' | ')}</strong>
-            </p>
-            <p>
-              Risky materials: <strong>{localMaterialGuide.risky.join(' | ')}</strong>
-            </p>
-            <ul>
-              {localMaterialGuide.suppliers.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
+            <h3>
+              <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('riskBuildBetterMaterialsGuide')} aria-expanded={expandedPanels.riskBuildBetterMaterialsGuide}>
+                <span>🧱 Build Better: Local Materials Guide</span>
+                <span>{expandedPanels.riskBuildBetterMaterialsGuide ? '▾' : '▸'}</span>
+              </button>
+            </h3>
+            {expandedPanels.riskBuildBetterMaterialsGuide && (
+              <>
+                <p>
+                  Recommended: <strong>{localMaterialGuide.recommended.join(' | ')}</strong>
+                </p>
+                <p>
+                  Risky materials: <strong>{localMaterialGuide.risky.join(' | ')}</strong>
+                </p>
+                <ul>
+                  {localMaterialGuide.suppliers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
 
           <div className="retrofit-model-output risk-card">
@@ -4472,52 +4494,70 @@ function App() {
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>💡 Safe Shelter Capacity Planner</h3>
-                <div className="inline-controls design-toolkit-compact-controls">
-                  <label>
-                    Shelter Area (sqm)
-                    <input
-                      type="number"
-                      min={20}
-                      value={shelterAreaSqm}
-                      onChange={(event) => setShelterAreaSqm(Number(event.target.value) || 20)}
-                    />
-                  </label>
-                  <label>
-                    Occupancy Type
-                    <select
-                      value={shelterOccupancyType}
-                      onChange={(event) => setShelterOccupancyType(event.target.value as typeof shelterOccupancyType)}
-                    >
-                      <option>School</option>
-                      <option>Mosque</option>
-                      <option>House</option>
-                    </select>
-                  </label>
-                </div>
-                <p>
-                  Max Safe Capacity: <strong>{shelterCapacityPlan.maxCapacity} people</strong>
-                </p>
-                <p>
-                  Space Per Person: <strong>{shelterCapacityPlan.areaPerPerson.toFixed(1)} sqm</strong>
-                </p>
-                <ul>
-                  {shelterCapacityPlan.layout.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('designSafeShelterCapacityPlanner')} aria-expanded={expandedPanels.designSafeShelterCapacityPlanner}>
+                    <span>💡 Safe Shelter Capacity Planner</span>
+                    <span>{expandedPanels.designSafeShelterCapacityPlanner ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.designSafeShelterCapacityPlanner && (
+                  <>
+                    <div className="inline-controls design-toolkit-compact-controls">
+                      <label>
+                        Shelter Area (sqm)
+                        <input
+                          type="number"
+                          min={20}
+                          value={shelterAreaSqm}
+                          onChange={(event) => setShelterAreaSqm(Number(event.target.value) || 20)}
+                        />
+                      </label>
+                      <label>
+                        Occupancy Type
+                        <select
+                          value={shelterOccupancyType}
+                          onChange={(event) => setShelterOccupancyType(event.target.value as typeof shelterOccupancyType)}
+                        >
+                          <option>School</option>
+                          <option>Mosque</option>
+                          <option>House</option>
+                        </select>
+                      </label>
+                    </div>
+                    <p>
+                      Max Safe Capacity: <strong>{shelterCapacityPlan.maxCapacity} people</strong>
+                    </p>
+                    <p>
+                      Space Per Person: <strong>{shelterCapacityPlan.areaPerPerson.toFixed(1)} sqm</strong>
+                    </p>
+                    <ul>
+                      {shelterCapacityPlan.layout.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>🔩 Recommended Foundation</h3>
-                <p>
-                  <strong>{foundationRecommendation.type}</strong>
-                </p>
-                <ul>
-                  {foundationRecommendation.risks.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('designRecommendedFoundation')} aria-expanded={expandedPanels.designRecommendedFoundation}>
+                    <span>🔩 Recommended Foundation</span>
+                    <span>{expandedPanels.designRecommendedFoundation ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.designRecommendedFoundation && (
+                  <>
+                    <p>
+                      <strong>{foundationRecommendation.type}</strong>
+                    </p>
+                    <ul>
+                      {foundationRecommendation.risks.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
