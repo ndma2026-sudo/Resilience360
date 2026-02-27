@@ -310,6 +310,22 @@ type LearnTrainingVideo = {
   fileName: string
 }
 
+const learnVideoIconById: Record<string, string> = {
+  'flood-barriers': '🌊',
+  'monsoon-damages': '☔',
+  'global-best-practice': '🌍',
+  'building-resilience-audit': '🏗️',
+  'floodplain-recovery': '🏞️',
+  'infra-damages': '🧱',
+  'innovative-tech': '💡',
+  'innovative-tech-sound': '🔊',
+  'modular-bridge': '🛤️',
+  'resilient-structures': '🌐',
+  'stormwater-management': '💧',
+  'arc-overview': '➕',
+  'video-3': '🪖',
+}
+
 const learnTrainingVideos: LearnTrainingVideo[] = [
   {
     id: 'flood-barriers',
@@ -1424,6 +1440,7 @@ function App() {
   const isUrdu = language === 'ur'
   const isHomeView = !activeSection
   const isApplyRegionView = activeSection === 'applyRegion'
+  const isLearnView = activeSection === 'learn'
   const isBestPracticesView = activeSection === 'bestPractices' || isApplyRegionView
   const isRiskMapsView = activeSection === 'riskMaps'
   const isReadinessView = activeSection === 'readiness'
@@ -5742,11 +5759,15 @@ function App() {
     if (activeSection === 'learn') {
       return (
         <div className="panel section-panel section-learn">
-          <h2>{t.sections.learn}</h2>
-          <p>Watch IAPD training videos directly in-app. Videos are stream-only, support fullscreen, and are kept for offline use on installed builds.</p>
-          <div className="inline-controls">
+          <div className="learn-title-wrap">
+            <h2>🎓 Learn &amp; Train</h2>
+            <p>Watch IAPD training videos directly in-app. Videos are stream-only, support fullscreen, and are kept for offline use on installed builds.</p>
+          </div>
+
+          <div className="inline-controls learn-inline-controls">
             <button
               type="button"
+              className="learn-enroll-btn"
               onClick={() => navigateToSection('coePortal')}
             >
               🎓 Enroll in COE lectures
@@ -5757,9 +5778,12 @@ function App() {
             <div className="card-grid learn-video-grid">
               {learnTrainingVideos.map((video) => (
                 <article key={video.id} className="learn-video-card">
-                  <h3>{video.title}</h3>
+                  <h3>
+                    <span className="learn-video-icon">{learnVideoIconById[video.id] ?? '🎬'}</span>
+                    <span>{video.title}</span>
+                  </h3>
                   <p>{video.summary}</p>
-                  <button onClick={() => openLearnVideoPlayer(video.fileName)}>▶️ Watch Video</button>
+                  <button className="learn-watch-btn" onClick={() => openLearnVideoPlayer(video.fileName)}>▶️ Watch Video</button>
                 </article>
               ))}
             </div>
@@ -5958,13 +5982,13 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${!isEmbeddedPortalSection ? 'resilience-bg-shell' : ''} ${isLightweight ? 'lightweight' : ''} ${isHomeView ? 'home-shell' : ''} ${isBestPracticesView ? 'best-practices-view' : ''} ${isRiskMapsView ? 'risk-maps-view' : ''} ${isReadinessView ? 'readiness-view' : ''}`}
+      className={`app-shell ${!isEmbeddedPortalSection ? 'resilience-bg-shell' : ''} ${isLightweight ? 'lightweight' : ''} ${isHomeView ? 'home-shell' : ''} ${isBestPracticesView || isLearnView ? 'best-practices-view' : ''} ${isRiskMapsView ? 'risk-maps-view' : ''} ${isReadinessView ? 'readiness-view' : ''}`}
       dir={isUrdu ? 'rtl' : 'ltr'}
     >
-      <header className={`navbar ${isHomeView ? 'home-navbar' : ''} ${isBestPracticesView ? 'best-practices-navbar' : ''} ${isRiskMapsView ? 'risk-maps-navbar' : ''} ${isReadinessView ? 'readiness-navbar' : ''}`}>
+      <header className={`navbar ${isHomeView ? 'home-navbar' : ''} ${isBestPracticesView || isLearnView ? 'best-practices-navbar' : ''} ${isRiskMapsView ? 'risk-maps-navbar' : ''} ${isReadinessView ? 'readiness-navbar' : ''}`}>
         <div className="brand">
           <div className="logo-badge">{t.logoText}</div>
-          {isHomeView || isBestPracticesView || isRiskMapsView ? (
+          {isHomeView || isBestPracticesView || isLearnView || isRiskMapsView ? (
             <div className="hero-title-wrap">
               <h1 className="hero-title">Resilience360°</h1>
               <p className="hero-subtitle">Infrastructure Safety &amp; Disaster Engineering Toolkit</p>
@@ -6025,7 +6049,7 @@ function App() {
           </>
         )}
         {!isHomeView && (
-          <div className={`section-back-row ${isBestPracticesView ? 'best-practices-back-row' : ''} ${isRiskMapsView ? 'risk-maps-back-row' : ''} ${isApplyRegionView ? 'apply-region-back-row' : ''}`}>
+          <div className={`section-back-row ${isBestPracticesView ? 'best-practices-back-row' : ''} ${isRiskMapsView ? 'risk-maps-back-row' : ''} ${isApplyRegionView ? 'apply-region-back-row' : ''} ${isLearnView ? 'learn-back-row' : ''}`}>
             <button className="section-back-btn" onClick={navigateBack}>
               {hasPreviousSection ? '⬅ Back' : '⬅ Back to Home'}
             </button>
