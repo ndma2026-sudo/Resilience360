@@ -1434,6 +1434,17 @@ function App() {
   const [showTrainingPrograms] = useState(false)
   const [activeLearnVideoFile, setActiveLearnVideoFile] = useState<string | null>(null)
   const [isLearnVideoVisible, setIsLearnVideoVisible] = useState(false)
+  const [expandedPanels, setExpandedPanels] = useState<Record<string, boolean>>({
+    windStormGuide: false,
+    fieldImplementationChecklist: false,
+    overallStructuralResilience: false,
+    slopeStabilityEstimator: false,
+    designKitCostEstimator: false,
+    selfAssessment: false,
+    warningWhatToDoNow: false,
+    warningEmergencyToolkit: false,
+    pmdLiveWeather: false,
+  })
   const [learnVideoPlaybackSrc, setLearnVideoPlaybackSrc] = useState('')
   const [infraLayoutPlaybackSrc, setInfraLayoutPlaybackSrc] = useState('')
   const [learnVideoSourceIndex, setLearnVideoSourceIndex] = useState(0)
@@ -1619,6 +1630,13 @@ function App() {
     if (videoElement.webkitEnterFullscreen) {
       videoElement.webkitEnterFullscreen()
     }
+  }, [])
+
+  const togglePanel = useCallback((panelKey: string) => {
+    setExpandedPanels((previous) => ({
+      ...previous,
+      [panelKey]: !previous[panelKey],
+    }))
   }, [])
 
   const navigateToSection = useCallback(
@@ -4493,128 +4511,171 @@ function App() {
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>📐 Wind and Storm Resistance Guide</h3>
-                <ul>
-                  <li>
-                    Roof Angle: <strong>{windStormGuide.roofAngle}</strong>
-                  </li>
-                  <li>
-                    Openings: <strong>{windStormGuide.openings}</strong>
-                  </li>
-                  <li>
-                    Tie Beams: <strong>{windStormGuide.tieBeams}</strong>
-                  </li>
-                </ul>
-                <p>{windStormGuide.note}</p>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('windStormGuide')} aria-expanded={expandedPanels.windStormGuide}>
+                    <span>📐 Wind and Storm Resistance Guide</span>
+                    <span>{expandedPanels.windStormGuide ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.windStormGuide && (
+                  <>
+                    <ul>
+                      <li>
+                        Roof Angle: <strong>{windStormGuide.roofAngle}</strong>
+                      </li>
+                      <li>
+                        Openings: <strong>{windStormGuide.openings}</strong>
+                      </li>
+                      <li>
+                        Tie Beams: <strong>{windStormGuide.tieBeams}</strong>
+                      </li>
+                    </ul>
+                    <p>{windStormGuide.note}</p>
+                  </>
+                )}
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>🚪 Field Implementation Checklist</h3>
-                <ul>
-                  {nonStructuralChecklist.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('fieldImplementationChecklist')} aria-expanded={expandedPanels.fieldImplementationChecklist}>
+                    <span>🚪 Field Implementation Checklist</span>
+                    <span>{expandedPanels.fieldImplementationChecklist ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.fieldImplementationChecklist && (
+                  <ul>
+                    {nonStructuralChecklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 
             <div className="design-toolkit-column">
               <div className="retrofit-model-output design-toolkit-card design-toolkit-score-card">
-                <h3>Overall Structural Resilience</h3>
-                <div className="design-toolkit-gauge-wrap">
-                  <div
-                    className="design-toolkit-gauge"
-                    style={{
-                      background: `conic-gradient(from 180deg, #2ed7f6 0deg, #30df8e ${scoreSweep * 0.5}deg, #f6d54a ${(scoreSweep * 0.72).toFixed(1)}deg, #ff9058 ${(scoreSweep * 0.88).toFixed(1)}deg, #ea4f76 ${scoreSweep}deg, rgba(54, 86, 118, 0.26) ${scoreSweep}deg 360deg)`,
-                    }}
-                  >
-                    <div className="design-toolkit-gauge-core">
-                      <strong>{overallReadinessScore}</strong>
-                      <span>/100</span>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('overallStructuralResilience')} aria-expanded={expandedPanels.overallStructuralResilience}>
+                    <span>Overall Structural Resilience</span>
+                    <span>{expandedPanels.overallStructuralResilience ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.overallStructuralResilience && (
+                  <>
+                    <div className="design-toolkit-gauge-wrap">
+                      <div
+                        className="design-toolkit-gauge"
+                        style={{
+                          background: `conic-gradient(from 180deg, #2ed7f6 0deg, #30df8e ${scoreSweep * 0.5}deg, #f6d54a ${(scoreSweep * 0.72).toFixed(1)}deg, #ff9058 ${(scoreSweep * 0.88).toFixed(1)}deg, #ea4f76 ${scoreSweep}deg, rgba(54, 86, 118, 0.26) ${scoreSweep}deg 360deg)`,
+                        }}
+                      >
+                        <div className="design-toolkit-gauge-core">
+                          <strong>{overallReadinessScore}</strong>
+                          <span>/100</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <p className="design-toolkit-score-label">Overall Readiness Score</p>
-                <div className="design-toolkit-status-list">
-                  <p>
-                    Material Safety <strong>{materialSafetyLabel}</strong>
-                  </p>
-                  <p>
-                    Slope Stability <strong>{slopeStatusLabel}</strong>
-                  </p>
-                  <p>
-                    Wind Resistance <strong>{windStatusLabel}</strong>
-                  </p>
-                </div>
+                    <p className="design-toolkit-score-label">Overall Readiness Score</p>
+                    <div className="design-toolkit-status-list">
+                      <p>
+                        Material Safety <strong>{materialSafetyLabel}</strong>
+                      </p>
+                      <p>
+                        Slope Stability <strong>{slopeStatusLabel}</strong>
+                      </p>
+                      <p>
+                        Wind Resistance <strong>{windStatusLabel}</strong>
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>📏 Slope Stability & Retaining Wall Estimator</h3>
-                <div className="inline-controls design-toolkit-compact-controls">
-                  <label>
-                    Slope Angle (deg)
-                    <input type="number" min={5} max={60} value={slopeAngleDeg} onChange={(event) => setSlopeAngleDeg(Number(event.target.value) || 5)} />
-                  </label>
-                  <label>
-                    Slope Height (m)
-                    <input type="number" min={1} max={20} value={slopeHeightM} onChange={(event) => setSlopeHeightM(Number(event.target.value) || 1)} />
-                  </label>
-                </div>
-                <p>
-                  Stability Class: <strong>{slopeEstimator.stabilityClass}</strong>
-                </p>
-                <p>
-                  Recommended Wall: <strong>{slopeEstimator.wallType}</strong>
-                </p>
-                <p>
-                  Minimum Embedment: <strong>{slopeEstimator.embedment} m</strong>
-                </p>
-                <p>{slopeEstimator.drainage}</p>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('slopeStabilityEstimator')} aria-expanded={expandedPanels.slopeStabilityEstimator}>
+                    <span>📏 Slope Stability & Retaining Wall Estimator</span>
+                    <span>{expandedPanels.slopeStabilityEstimator ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.slopeStabilityEstimator && (
+                  <>
+                    <div className="inline-controls design-toolkit-compact-controls">
+                      <label>
+                        Slope Angle (deg)
+                        <input type="number" min={5} max={60} value={slopeAngleDeg} onChange={(event) => setSlopeAngleDeg(Number(event.target.value) || 5)} />
+                      </label>
+                      <label>
+                        Slope Height (m)
+                        <input type="number" min={1} max={20} value={slopeHeightM} onChange={(event) => setSlopeHeightM(Number(event.target.value) || 1)} />
+                      </label>
+                    </div>
+                    <p>
+                      Stability Class: <strong>{slopeEstimator.stabilityClass}</strong>
+                    </p>
+                    <p>
+                      Recommended Wall: <strong>{slopeEstimator.wallType}</strong>
+                    </p>
+                    <p>
+                      Minimum Embedment: <strong>{slopeEstimator.embedment} m</strong>
+                    </p>
+                    <p>{slopeEstimator.drainage}</p>
+                  </>
+                )}
               </div>
 
               <div className="retrofit-model-output design-toolkit-card">
-                <h3>📦 Resilient Design Kit Cost Estimator</h3>
-                <div className="inline-controls design-toolkit-compact-controls">
-                  <label>
-                    House Type
-                    <select value={houseTypeForCost} onChange={(event) => setHouseTypeForCost(event.target.value as typeof houseTypeForCost)}>
-                      <option>Single-Storey</option>
-                      <option>Double-Storey</option>
-                      <option>School Block</option>
-                      <option>Clinic Unit</option>
-                    </select>
-                  </label>
-                  <label>
-                    Floor Area (sq ft)
-                    <input
-                      type="number"
-                      min={300}
-                      value={floorAreaSqftCost}
-                      onChange={(event) => setFloorAreaSqftCost(Number(event.target.value) || 300)}
-                    />
-                  </label>
-                </div>
-                <div className="retrofit-insights-grid design-toolkit-cost-grid">
-                  <p>
-                    Unit Cost: <strong>PKR {Math.round(designCostEstimate.unitCost).toLocaleString()}/sq ft</strong>
-                  </p>
-                  <p>
-                    Subtotal: <strong>PKR {Math.round(designCostEstimate.subtotal).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Contingency: <strong>PKR {Math.round(designCostEstimate.contingency).toLocaleString()}</strong>
-                  </p>
-                  <p>
-                    Total Estimate: <strong>PKR {Math.round(designCostEstimate.total).toLocaleString()}</strong>
-                  </p>
-                </div>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('designKitCostEstimator')} aria-expanded={expandedPanels.designKitCostEstimator}>
+                    <span>📦 Resilient Design Kit Cost Estimator</span>
+                    <span>{expandedPanels.designKitCostEstimator ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.designKitCostEstimator && (
+                  <>
+                    <div className="inline-controls design-toolkit-compact-controls">
+                      <label>
+                        House Type
+                        <select value={houseTypeForCost} onChange={(event) => setHouseTypeForCost(event.target.value as typeof houseTypeForCost)}>
+                          <option>Single-Storey</option>
+                          <option>Double-Storey</option>
+                          <option>School Block</option>
+                          <option>Clinic Unit</option>
+                        </select>
+                      </label>
+                      <label>
+                        Floor Area (sq ft)
+                        <input
+                          type="number"
+                          min={300}
+                          value={floorAreaSqftCost}
+                          onChange={(event) => setFloorAreaSqftCost(Number(event.target.value) || 300)}
+                        />
+                      </label>
+                    </div>
+                    <div className="retrofit-insights-grid design-toolkit-cost-grid">
+                      <p>
+                        Unit Cost: <strong>PKR {Math.round(designCostEstimate.unitCost).toLocaleString()}/sq ft</strong>
+                      </p>
+                      <p>
+                        Subtotal: <strong>PKR {Math.round(designCostEstimate.subtotal).toLocaleString()}</strong>
+                      </p>
+                      <p>
+                        Contingency: <strong>PKR {Math.round(designCostEstimate.contingency).toLocaleString()}</strong>
+                      </p>
+                      <p>
+                        Total Estimate: <strong>PKR {Math.round(designCostEstimate.total).toLocaleString()}</strong>
+                      </p>
+                    </div>
 
-                <div className="inline-controls design-toolkit-actions">
-                  <button onClick={handleEstimateTotalUpgradeCost}>📦 Estimate My Total Upgrade Cost</button>
-                  <button onClick={downloadConstructionDrawings}>🧰 Download Construction Drawings</button>
-                  <button onClick={generateFieldImplementationChecklist}>📋 Generate Field Implementation Checklist</button>
-                  <button onClick={() => void shareDesignWithCommunity()}>🌍 Share Design with Community</button>
-                </div>
+                    <div className="inline-controls design-toolkit-actions">
+                      <button onClick={handleEstimateTotalUpgradeCost}>📦 Estimate My Total Upgrade Cost</button>
+                      <button onClick={downloadConstructionDrawings}>🧰 Download Construction Drawings</button>
+                      <button onClick={generateFieldImplementationChecklist}>📋 Generate Field Implementation Checklist</button>
+                      <button onClick={() => void shareDesignWithCommunity()}>🌍 Share Design with Community</button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -5277,78 +5338,87 @@ function App() {
               </section>
 
               <section className="readiness-card">
-                <h3>Is My Building Safe? Self-Assessment</h3>
-                <label>
-                  Year Built
-                  <input
-                    type="number"
-                    min={1950}
-                    max={new Date().getFullYear()}
-                    value={selfAssessmentYearBuilt}
-                    onChange={(event) => setSelfAssessmentYearBuilt(Number(event.target.value) || 2000)}
-                  />
-                </label>
-                <label>
-                  Construction Type
-                  <select value={selfAssessmentConstruction} onChange={(event) => setSelfAssessmentConstruction(event.target.value)}>
-                    <option>Reinforced Concrete</option>
-                    <option>Steel Frame</option>
-                    <option>Unreinforced Masonry</option>
-                  </select>
-                </label>
-                <label>
-                  Materials
-                  <select value={materialType} onChange={(event) => setMaterialType(event.target.value)}>
-                    <option>Reinforced Concrete</option>
-                    <option>Steel Frame</option>
-                    <option>Unreinforced Masonry</option>
-                  </select>
-                </label>
-                <div className="readiness-advanced-grid">
-                  <label>
-                    Nearby Drainage
-                    <select
-                      value={selfAssessmentDrainage}
-                      onChange={(event) => setSelfAssessmentDrainage(event.target.value as 'Good' | 'Average' | 'Poor')}
-                    >
-                      <option>Good</option>
-                      <option>Average</option>
-                      <option>Poor</option>
-                    </select>
-                  </label>
-                  <label>
-                    Seismic Zone
-                    <select
-                      value={selfAssessmentSeismicZone}
-                      onChange={(event) => setSelfAssessmentSeismicZone(event.target.value as 'Low' | 'Medium' | 'High')}
-                    >
-                      <option>Low</option>
-                      <option>Medium</option>
-                      <option>High</option>
-                    </select>
-                  </label>
-                  <label>
-                    Foundation
-                    <select
-                      value={selfAssessmentFoundation}
-                      onChange={(event) =>
-                        setSelfAssessmentFoundation(event.target.value as 'Isolated Footing' | 'Raft' | 'Stone Masonry' | 'Unknown')
-                      }
-                    >
-                      <option>Isolated Footing</option>
-                      <option>Raft</option>
-                      <option>Stone Masonry</option>
-                      <option>Unknown</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="readiness-checklist">
-                  <span>✓ Seismic Zone: {selfAssessmentSeismicZone}</span>
-                  <span>✓ {selfAssessmentFoundation}</span>
-                </div>
-                <p className="readiness-assessment-note">
-                  Structural Safety Rating: <strong>{buildingSafetyAssessment.rating}</strong> ({buildingSafetyAssessment.score}/100)
-                </p>
+                <h3>
+                  <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('selfAssessment')} aria-expanded={expandedPanels.selfAssessment}>
+                    <span>Is My Building Safe? Self-Assessment</span>
+                    <span>{expandedPanels.selfAssessment ? '▾' : '▸'}</span>
+                  </button>
+                </h3>
+                {expandedPanels.selfAssessment && (
+                  <>
+                    <label>
+                      Year Built
+                      <input
+                        type="number"
+                        min={1950}
+                        max={new Date().getFullYear()}
+                        value={selfAssessmentYearBuilt}
+                        onChange={(event) => setSelfAssessmentYearBuilt(Number(event.target.value) || 2000)}
+                      />
+                    </label>
+                    <label>
+                      Construction Type
+                      <select value={selfAssessmentConstruction} onChange={(event) => setSelfAssessmentConstruction(event.target.value)}>
+                        <option>Reinforced Concrete</option>
+                        <option>Steel Frame</option>
+                        <option>Unreinforced Masonry</option>
+                      </select>
+                    </label>
+                    <label>
+                      Materials
+                      <select value={materialType} onChange={(event) => setMaterialType(event.target.value)}>
+                        <option>Reinforced Concrete</option>
+                        <option>Steel Frame</option>
+                        <option>Unreinforced Masonry</option>
+                      </select>
+                    </label>
+                    <div className="readiness-advanced-grid">
+                      <label>
+                        Nearby Drainage
+                        <select
+                          value={selfAssessmentDrainage}
+                          onChange={(event) => setSelfAssessmentDrainage(event.target.value as 'Good' | 'Average' | 'Poor')}
+                        >
+                          <option>Good</option>
+                          <option>Average</option>
+                          <option>Poor</option>
+                        </select>
+                      </label>
+                      <label>
+                        Seismic Zone
+                        <select
+                          value={selfAssessmentSeismicZone}
+                          onChange={(event) => setSelfAssessmentSeismicZone(event.target.value as 'Low' | 'Medium' | 'High')}
+                        >
+                          <option>Low</option>
+                          <option>Medium</option>
+                          <option>High</option>
+                        </select>
+                      </label>
+                      <label>
+                        Foundation
+                        <select
+                          value={selfAssessmentFoundation}
+                          onChange={(event) =>
+                            setSelfAssessmentFoundation(event.target.value as 'Isolated Footing' | 'Raft' | 'Stone Masonry' | 'Unknown')
+                          }
+                        >
+                          <option>Isolated Footing</option>
+                          <option>Raft</option>
+                          <option>Stone Masonry</option>
+                          <option>Unknown</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="readiness-checklist">
+                      <span>✓ Seismic Zone: {selfAssessmentSeismicZone}</span>
+                      <span>✓ {selfAssessmentFoundation}</span>
+                    </div>
+                    <p className="readiness-assessment-note">
+                      Structural Safety Rating: <strong>{buildingSafetyAssessment.rating}</strong> ({buildingSafetyAssessment.score}/100)
+                    </p>
+                  </>
+                )}
               </section>
             </aside>
 
@@ -5814,113 +5884,131 @@ function App() {
           </div>
 
           <div className="warning-whatnow-card">
-            <h3>What To Do Now</h3>
-            <div className="warning-toolkit-grid">
-              <article className="warning-toolkit-column">
-                <h4>👜 Emergency Kit Checklist</h4>
-                <ul className="warning-toolkit-list warning-checklist-list">
-                  {emergencyKitChecklistItems.map((item) => (
-                    <li key={item}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(emergencyKitChecks[item])}
-                          onChange={(event) =>
-                            setEmergencyKitChecks((previous) => ({
-                              ...previous,
-                              [item]: event.target.checked,
-                            }))
-                          }
-                        />{' '}
-                        {item}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="warning-toolkit-column">
-                <h4>🧰 Emergency Response Toolkit</h4>
-                <ul className="warning-toolkit-list">
-                  <li>Move vulnerable people and critical records to safe elevation.</li>
-                  <li>Follow district evacuation routes and keep emergency kits ready.</li>
-                  <li>Use SMS-style alert channel for last-mile communication.</li>
-                  <li>Switch off electricity and move to higher floor or designated shelter.</li>
-                  <li>Drop, cover, and hold under sturdy furniture during tremors.</li>
-                  {(nearestHospitalsByProvince[selectedProvince] ?? nearestHospitalsByProvince.Punjab)
-                    .slice(0, 4)
-                    .map((hospital) => (
-                      <li key={hospital}>{hospital}</li>
+            <h3>
+              <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('warningWhatToDoNow')} aria-expanded={expandedPanels.warningWhatToDoNow}>
+                <span>What To Do Now</span>
+                <span>{expandedPanels.warningWhatToDoNow ? '▾' : '▸'}</span>
+              </button>
+            </h3>
+            {expandedPanels.warningWhatToDoNow && (
+              <div className="warning-toolkit-grid">
+                <article className="warning-toolkit-column">
+                  <h4>👜 Emergency Kit Checklist</h4>
+                  <ul className="warning-toolkit-list warning-checklist-list">
+                    {emergencyKitChecklistItems.map((item) => (
+                      <li key={item}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(emergencyKitChecks[item])}
+                            onChange={(event) =>
+                              setEmergencyKitChecks((previous) => ({
+                                ...previous,
+                                [item]: event.target.checked,
+                              }))
+                            }
+                          />{' '}
+                          {item}
+                        </label>
+                      </li>
                     ))}
-                </ul>
-              </article>
-            </div>
+                  </ul>
+                </article>
+
+                <article className="warning-toolkit-column">
+                  <h4>
+                    <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('warningEmergencyToolkit')} aria-expanded={expandedPanels.warningEmergencyToolkit}>
+                      <span>🧰 Emergency Response Toolkit</span>
+                      <span>{expandedPanels.warningEmergencyToolkit ? '▾' : '▸'}</span>
+                    </button>
+                  </h4>
+                  {expandedPanels.warningEmergencyToolkit && (
+                    <ul className="warning-toolkit-list">
+                      <li>Move vulnerable people and critical records to safe elevation.</li>
+                      <li>Follow district evacuation routes and keep emergency kits ready.</li>
+                      <li>Use SMS-style alert channel for last-mile communication.</li>
+                      <li>Switch off electricity and move to higher floor or designated shelter.</li>
+                      <li>Drop, cover, and hold under sturdy furniture during tremors.</li>
+                      {(nearestHospitalsByProvince[selectedProvince] ?? nearestHospitalsByProvince.Punjab)
+                        .slice(0, 4)
+                        .map((hospital) => (
+                          <li key={hospital}>{hospital}</li>
+                        ))}
+                    </ul>
+                  )}
+                </article>
+              </div>
+            )}
           </div>
 
           {pmdLiveSnapshot ? (
             <div className="pmd-live-widget">
-              <h3>PMD Live City Weather</h3>
-              {pmdLiveSnapshot.cities.length > 0 ? (
-                <div className="pmd-city-grid">
-                  {pmdLiveSnapshot.cities.map((cityWeather) => (
-                    <article key={cityWeather.city} className="pmd-city-card">
-                      <strong>{cityWeather.city}</strong>
-                      <span>{cityWeather.temperatureC}°C</span>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p>Live city temperatures are temporarily unavailable from PMD. Satellite/radar links remain live.</p>
-              )}
-              {pmdLiveSnapshot.mode === 'rss-fallback' && (
-                <p className="pmd-live-meta">PMD web endpoints are slow/unreachable right now; showing CAP RSS fallback updates.</p>
-              )}
-              {pmdLiveSnapshot.warning && <p className="pmd-live-meta">{pmdLiveSnapshot.warning}</p>}
-              {pmdLiveSnapshot.latestAlerts && pmdLiveSnapshot.latestAlerts.length > 0 && (
-                <div className="pmd-media-card">
-                  <h4>Latest PMD Updates (CAP)</h4>
-                  <ul>
-                    {pmdLiveSnapshot.latestAlerts.slice(0, 5).map((item) => (
-                      <li key={item.id}>
-                        <a href={item.link} target="_blank" rel="noreferrer">
-                          {item.title}
-                        </a>
-                        {item.publishedAt ? ` • ${new Date(item.publishedAt).toLocaleString()}` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p className="pmd-live-meta">Updated: {new Date(pmdLiveSnapshot.updatedAt).toLocaleString()}</p>
-
-              <div className="pmd-media-grid">
-                <article className="pmd-media-card">
-                  <h4>PMD Satellite</h4>
-                  {pmdLiveSnapshot.satellite.imageUrl ? (
-                    <a href={pmdLiveSnapshot.links.satellite} target="_blank" rel="noreferrer">
-                      <img src={pmdLiveSnapshot.satellite.imageUrl} alt="Latest PMD satellite" className="pmd-satellite-img" />
-                    </a>
+              <h3>
+                <button type="button" className="section-collapsible-toggle" onClick={() => togglePanel('pmdLiveWeather')} aria-expanded={expandedPanels.pmdLiveWeather}>
+                  <span>PMD Live City Weather</span>
+                  <span>{expandedPanels.pmdLiveWeather ? '▾' : '▸'}</span>
+                </button>
+              </h3>
+              {expandedPanels.pmdLiveWeather && (
+                <>
+                  {pmdLiveSnapshot.cities.length > 0 ? (
+                    <div className="pmd-city-grid">
+                      {pmdLiveSnapshot.cities.map((cityWeather) => (
+                        <article key={cityWeather.city} className="pmd-city-card">
+                          <strong>{cityWeather.city}</strong>
+                          <span>{cityWeather.temperatureC}°C</span>
+                        </article>
+                      ))}
+                    </div>
                   ) : (
-                    <p>Satellite image preview is not currently available.</p>
+                    <p>Live city temperatures are temporarily unavailable from PMD. Satellite/radar links remain live.</p>
                   )}
-                  <a href={pmdLiveSnapshot.links.satellite} target="_blank" rel="noreferrer">
-                    Open full satellite page
-                  </a>
-                </article>
+                  {pmdLiveSnapshot.mode === 'rss-fallback' && (
+                    <p className="pmd-live-meta">PMD web endpoints are slow/unreachable right now; showing CAP RSS fallback updates.</p>
+                  )}
+                  {pmdLiveSnapshot.warning && <p className="pmd-live-meta">{pmdLiveSnapshot.warning}</p>}
+                  {pmdLiveSnapshot.latestAlerts && pmdLiveSnapshot.latestAlerts.length > 0 && (
+                    <div className="pmd-media-card">
+                      <h4>Latest PMD Updates (CAP)</h4>
+                      <ul>
+                        {pmdLiveSnapshot.latestAlerts.slice(0, 5).map((item) => (
+                          <li key={item.id}>
+                            <a href={item.link} target="_blank" rel="noreferrer">
+                              {item.title}
+                            </a>
+                            {item.publishedAt ? ` • ${new Date(item.publishedAt).toLocaleString()}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="pmd-live-meta">Updated: {new Date(pmdLiveSnapshot.updatedAt).toLocaleString()}</p>
 
-                <article className="pmd-media-card">
-                  <h4>PMD Radar</h4>
-                  <p>Live radar dashboard from PMD.</p>
-                  <a href={pmdLiveSnapshot.links.radar} target="_blank" rel="noreferrer">
-                    Open PMD radar
-                  </a>
-                  <small>PMD radar may require official login access.</small>
-                </article>
-              </div>
+                  <div className="pmd-media-grid">
+                    <article className="pmd-media-card">
+                      <h4>PMD Satellite</h4>
+                      {pmdLiveSnapshot.satellite.imageUrl ? (
+                        <a href={pmdLiveSnapshot.links.satellite} target="_blank" rel="noreferrer">
+                          <img src={pmdLiveSnapshot.satellite.imageUrl} alt="Latest PMD satellite" className="pmd-satellite-img" />
+                        </a>
+                      ) : (
+                        <p>Satellite image preview is not currently available.</p>
+                      )}
+                    </article>
+
+                    <article className="pmd-media-card">
+                      <h4>PMD Radar</h4>
+                      <a href={pmdLiveSnapshot.links.radar} target="_blank" rel="noreferrer">
+                        Open latest radar imagery
+                      </a>
+                    </article>
+                  </div>
+                </>
+              )}
             </div>
-          ) : null}
-
-          <div className="retrofit-model-output">
+          ) : (
+            <p className="pmd-live-meta">PMD live city weather is not available right now. Use “Details FMC Help” to refresh.</p>
+          )}
             <h3>🌧️ Smart Drainage & Rain Alert Notification</h3>
             <p>Reference source: Pakistan Meteorological Department (PMD) live weather + CAP alerts.</p>
             <div className="inline-controls">
@@ -5937,7 +6025,6 @@ function App() {
               <li>Flooded road warning: do not cross standing water above wheel level.</li>
               <li>High-risk users receive recommended shelter move advice before severe rain.</li>
             </ul>
-          </div>
         </div>
       )
     }

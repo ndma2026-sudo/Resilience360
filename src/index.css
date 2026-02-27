@@ -1019,6 +1019,31 @@ img {
   letter-spacing: -0.01em;
 }
 
+.section-collapsible-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(112, 145, 194, 0.52);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, rgba(15, 31, 72, 0.82) 0%, rgba(10, 22, 54, 0.74) 100%);
+  color: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.section-collapsible-toggle:hover {
+  border-color: rgba(132, 175, 233, 0.72);
+  background: linear-gradient(180deg, rgba(18, 36, 82, 0.88) 0%, rgba(12, 26, 61, 0.8) 100%);
+}
+
+.section-collapsible-toggle[aria-expanded='true'] {
+  border-color: rgba(125, 205, 246, 0.82);
+}
+
 .section-design-toolkit .design-toolkit-card p {
   margin: 0 0 7px;
   font-size: 0.93rem;
@@ -2401,6 +2426,16 @@ progress {
   margin: 0 0 8px;
   font-size: 1rem;
   letter-spacing: 0.02em;
+}
+
+.readiness-card h3 .section-collapsible-toggle {
+  margin: 0;
+}
+
+.warning-whatnow-card h3 .section-collapsible-toggle,
+.warning-toolkit-column h4 .section-collapsible-toggle,
+.pmd-live-widget h3 .section-collapsible-toggle {
+  font-weight: 700;
 }
 
 .readiness-card label {
